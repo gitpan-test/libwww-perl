@@ -3,12 +3,13 @@ package HTTP::Headers::Util;
 use strict;
 use vars qw($VERSION @ISA @EXPORT_OK);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 require Exporter;
 @ISA=qw(Exporter);
 
-@EXPORT_OK=qw(split_header_words join_header_words);
+@EXPORT_OK=qw(split_etag_list join_etag_list
+              split_header_words join_header_words);
 
 =head1 NAME
 
@@ -22,29 +23,63 @@ HTTP::Headers::Util - Header value parsing utility functions
 =head1 DESCRIPTION
 
 This module provide a few functions that helps parsing and
-construction of valid header values.  None of the functions are
+construction of valid HTTP header values.  None of the functions are
 exported by default.
 
 The following functions are provided:
 
 =over 4
 
+
 =item split_header_words( @header_values )
 
-This function will split the header values given as argument into a
+This function will parse the header values given as argument into a
 list of anonymous arrays containing key/value pairs.  The function
-know how to deal with ",", ";" and "=" as well as quoted values.
-Multiple values are treated as if they were separated by comma.
+know how to deal with ",", ";" and "=" as well as quoted values after
+"=".  A list of space separated tokens are parsed as if they were
+separated by ";".
 
-This is easier to describe with an example:
+If the @header_values passed as argument contains multiple values,
+then they are treated as if they were a single value separated by
+comma ",".
+
+This means that this function is useful to parse header fields that
+follow this syntax (BNF as from the HTTP/1.1 specification, but we relax
+the requirement for tokens).
+
+  headers           = #header
+  header            = (token | parameter) *( [";"] (token | parameter))
+
+  token             = 1*<any CHAR except CTLs or separators>
+  separators        = "(" | ")" | "<" | ">" | "@"
+                    | "," | ";" | ":" | "\" | <">
+                    | "/" | "[" | "]" | "?" | "="
+                    | "{" | "}" | SP | HT
+
+  quoted-string     = ( <"> *(qdtext | quoted-pair ) <"> )
+  qdtext            = <any TEXT except <">>
+  quoted-pair       = "\" CHAR
+
+  parameter         = attribute "=" value
+  attribute         = token
+  value             = token | quoted-string
+
+Each I<header> is represented by an anonymous array of key/value
+pairs.  If a token is recognized then the value will be C<undef>.
+Syntactically incorrect headers will not necessary be parsed as you
+would want.
+
+This is easier to describe with some examples:
 
    split_header_words('foo="bar"; port="80,81"; discard, bar=baz')
    split_header_words('text/html; charset="iso-8859-1");
+   split_header_words('Basic realm="\"foo\\bar\""');
 
 will return
 
    [foo=>'bar', port=>'80,81', discard=> undef], [bar=>'baz' ]
    ['text/html' => undef, charset => 'iso-8859-1']
+   [Basic => undef, realm => '"foo\bar"']
 
 =cut
 
@@ -56,26 +91,29 @@ sub split_header_words
     for (@val) {
 	my @cur;
 	while (length) {
-	    if (s/^\s*(=*[^\s=;,]+)//) {
+	    if (s/^\s*(=*[^\s=;,]+)//) {  # 'token' or parameter 'attribute'
 		push(@cur, $1);
+		# a quoted value
 		if (s/^\s*=\s*\"([^\"\\]*(?:\\.[^\"\\]*)*)\"//) {
 		    my $val = $1;
 		    $val =~ s/\\(.)/$1/g;
 		    push(@cur, $val);
-		} elsif (s/^\s*=\s*([^;,]+)//) {
+		# some unquoted value
+		} elsif (s/^\s*=\s*([^;,\s]*)//) {
 		    my $val = $1;
 		    $val =~ s/\s+$//;
 		    push(@cur, $val);
+		# no value, a lone token
 		} else {
 		    push(@cur, undef);
 		}
 	    } elsif (s/^\s*,//) {
-		push(@res, [@cur]);
+		push(@res, [@cur]) if @cur;
 		@cur = ();
-	    } elsif (s/^\s*;?//) {
+	    } elsif (s/^\s*;// || s/^\s+//) {
 		# continue
 	    } else {
-		warn "This should not happen: $_\n";
+		die "This should not happen: '$_'";
 	    }
 	}
 	push(@res, \@cur) if @cur;
@@ -87,15 +125,24 @@ sub split_header_words
 =item join_header_words( @arrays )
 
 This will do the opposite convertion of what split_header_words()
-does.  It takes a list of anonymous arrays as argument and produce a
-single header value.  Attribute values are quoted if needed.  Example:
+does.  It takes a list of anonymous arrays as argument (or a list of
+key/value pairs) and produce a single header value.  Attribute values
+are quoted if needed.
+
+Example:
 
    join_header_words(["text/plain" => undef, charset => "iso-8859/1"]);
+   join_header_words(""text/plain" => undef, charset => "iso-8859/1");
+
+will both return the string:
+
+   text/plain; charset="iso-8859/1"
 
 =cut
 
 sub join_header_words
 {
+    @_ = ([@_]) if @_ && !ref($_[0]);
     my @res;
     for (@_) {
 	my @cur = @$_;
@@ -118,6 +165,59 @@ sub join_header_words
     join(", ", @res);
 }
 
+=item split_etag_list( @header_values )
+
+Split a list of entity tag values.  The return value is a list
+consisting of one element per entity tag.  Suitable for parsing
+headers like C<If-Match>, C<If-None-Match>.  You might even want to
+use it on C<ETag> and C<If-Range> entity tag values, because it will
+normalize them to the common form.
+
+  entity-tag	  = [ weak ] opaque-tag
+  weak		  = "W/"
+  opaque-tag	  = quoted-string
+
+
+=cut
+
+sub split_etag_list
+{
+    my(@val) = @_;
+    my @res;
+    for (@val) {
+        while (length) {
+            my $weak = "";
+	    $weak = "W/" if s,^\s*[wW]/,,;
+            my $etag = "";
+	    if (s/^\s*(\"[^\"\\]*(?:\\.[^\"\\]*)*\")//) {
+		push(@res, "$weak$1");
+            } elsif (s/^\s*,//) {
+                push(@res, qq(W/"")) if $weak;
+            } elsif (s/^\s*([^,\s]+)//) {
+                $etag = $1;
+		$etag =~ s/([\"\\])/\\$1/g;
+	        push(@res, qq($weak"$etag"));
+            } elsif (s/^\s+// || !length) {
+                push(@res, qq(W/"")) if $weak;
+            } else {
+	 	die "This should not happen: '$_'";
+            }
+        }
+   }
+   @res;
+}
+
+=item join_etag_list(@list)
+
+Reverses the operation by split_etag_list().
+
+=cut
+
+sub join_etag_list
+{
+   join(", ", @_);
+}
+
 1;
 
 __END__
@@ -126,7 +226,7 @@ __END__
 
 =head1 COPYRIGHT
 
-Copyright 1997, Gisle Aas
+Copyright 1997-1998, Gisle Aas
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

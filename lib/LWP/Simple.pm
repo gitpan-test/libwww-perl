@@ -1,5 +1,5 @@
 #
-# $Id: Simple.pm,v 1.24 1997/10/16 11:13:08 aas Exp $
+# $Id: Simple.pm,v 1.26 1997/11/25 16:11:27 aas Exp $
 
 =head1 NAME
 
@@ -159,7 +159,7 @@ use HTTP::Status;
 push(@EXPORT, @HTTP::Status::EXPORT);
 
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 $FULL_LWP++ if grep {$_ eq "http_proxy"} keys %ENV;
 
 
@@ -167,7 +167,10 @@ sub import
 {
     my $pkg = shift;
     my $callpkg = caller;
-    $FULL_LWP++ if grep $_ eq '$ua', @_;
+    if (grep $_ eq '$ua', @_) {
+	$FULL_LWP++;
+	_init_ua();
+    }
     Exporter::export($pkg, $callpkg, @_);
 }
 
@@ -217,8 +220,8 @@ sub head ($)
 	return $response unless wantarray;
 	return ($response->header('Content-Type'),
 		$response->header('Content-Length'),
-		str2time($response->header('Last-Modified')),
-		str2time($response->header('Expires')),
+		HTTP::Date::str2time($response->header('Last-Modified')),
+		HTTP::Date::str2time($response->header('Expires')),
 		$response->header('Server'),
 	       );
     }

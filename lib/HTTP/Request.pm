@@ -1,5 +1,5 @@
 #
-# $Id: Request.pm,v 1.18 1997/10/09 07:22:41 aas Exp $
+# $Id: Request.pm,v 1.21 1997/12/03 21:07:08 aas Exp $
 
 package HTTP::Request;
 
@@ -10,28 +10,30 @@ HTTP::Request - Class encapsulating HTTP Requests
 =head1 SYNOPSIS
 
  require HTTP::Request;
- $request = new HTTP::Request GET => 'http://www.oslonett.no/';
+ $request = HTTP::Request->new(GET => 'http://www.oslonett.no/');
 
 =head1 DESCRIPTION
 
 C<HTTP::Request> is a class encapsulating HTTP style requests,
-consisting of a request line, a MIME header, and optional
+consisting of a request line, some headers, and some (potentially empty)
 content. Note that the LWP library also uses this HTTP style requests
 for non-HTTP protocols.
 
 Instances of this class are usually passed to the C<request()> method
 of an C<LWP::UserAgent> object:
 
- $ua = new LWP::UserAgent;
- $request = new HTTP::Request GET => 'http://www.oslonett.no/';
+ $ua = LWP::UserAgent->new;
+ $request = HTTP::Request->new(GET => 'http://www.oslonett.no/');
  $response = $ua->request($request);
 
-=head1 METHODS
-
 C<HTTP::Request> is a subclass of C<HTTP::Message> and therefore
-inherits its methods.  The inherited methods are header(),
+inherits its methods.  The inherited methods often used are header(),
 push_header(), remove_header(), headers_as_string() and content().
 See L<HTTP::Message> for details.
+
+The following additional methods are available:
+
+=over 4
 
 =cut
 
@@ -41,21 +43,19 @@ require HTTP::Message;
 use URI::URL ();
 use strict;
 
-=head2 $r = new HTTP::Request $method, $url, [$header, [$content]]
+=item $r = HTTP::Request->new($method, $url, [$header, [$content]])
 
 Constructs a new C<HTTP::Request> object describing a request on the
 object C<$url> using method C<$method>.  The C<$url> argument can be
 either a string, or a reference to a C<URI::URL> object.  The $header
-argument should be a reference to a HTTP::Headers object.
-
- $request = new HTTP::Request GET => 'http://www.oslonett.no/';
+argument should be a reference to an C<HTTP::Headers> object.
 
 =cut
 
 sub new
 {
     my($class, $method, $url, $header, $content) = @_;
-    my $self = bless new HTTP::Message $header, $content;
+    my $self = $class->SUPER::new($header, $content);
     $self->method($method);
     $self->url($url);
     $self;
@@ -65,16 +65,16 @@ sub new
 sub clone
 {
     my $self = shift;
-    my $clone = bless $self->HTTP::Message::clone;
+    my $clone = bless $self->SUPER::clone, ref($self);
     $clone->method($self->method);
     $clone->url($self->url);
     $clone;
 }
 
 
-=head2 $r->method([$val])
+=item $r->method([$val])
 
-=head2 $r->url([$val])
+=item $r->url([$val])
 
 These methods provide public access to the member variables containing
 respectively the method of the request and the URL object of the
@@ -95,23 +95,24 @@ sub method  { shift->_elem('_method', @_); }
 sub url
 {
     my $self = shift;
-    my($url) = @_;
+    my $old = $self->{'_url'};
     if (@_) {
+	my $url = shift;
 	if (!defined $url) {
 	    # that's ok
 	} elsif (ref $url) {
 	    $url = $url->abs;
 	} else {
-	    eval {  $url = URI::URL->new($url); };
-	    $url = undef if $@;
+	    $url = eval { URI::URL->new($url) };
 	}
+	$self->{'_url'} = $url;
     }
-    $self->_elem('_url', $url);
+    $old;
 }
 
 *uri = \&url;  # this is the same for now
 
-=head2 $r->as_string()
+=item $r->as_string()
 
 Method returning a textual representation of the request.
 Mainly useful for debugging purposes. It takes no arguments.
@@ -121,17 +122,34 @@ Mainly useful for debugging purposes. It takes no arguments.
 sub as_string
 {
     my $self = shift;
-    my @result = ("--- $self ---");
+    my @result;
+    #push(@result, "---- $self -----");
+    my $req_line = $self->method || "[NO METHOD]";
     my $url = $self->url;
     $url = (defined $url) ? $url->as_string : "[NO URL]";
-    push(@result, $self->method . " $url");
+    $req_line .= " $url";
+    my $proto = $self->protocol;
+    $req_line .= " $proto" if $proto;
+
+    push(@result, $req_line);
     push(@result, $self->headers_as_string);
     my $content = $self->content;
-    if ($content) {
-	push(@result, $self->content);
+    if (defined $content) {
+	push(@result, $content);
     }
-    push(@result, ("-" x 35));
+    #push(@result, ("-" x 40));
     join("\n", @result, "");
 }
 
 1;
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright 1995-1997 Gisle Aas.
+
+This library is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=cut

@@ -1,5 +1,5 @@
 #
-# $Id: Response.pm,v 1.26 1997/05/20 20:56:50 aas Exp $
+# $Id: Response.pm,v 1.30 1997/12/03 21:05:47 aas Exp $
 
 package HTTP::Response;
 
@@ -22,7 +22,7 @@ responses also for non-HTTP protocol schemes.
 Instances of this class are usually created and returned by the
 C<request()> method of an C<LWP::UserAgent> object:
 
- ...
+ #...
  $response = $ua->request($request)
  if ($response->is_success) {
      print $response->content;
@@ -30,13 +30,15 @@ C<request()> method of an C<LWP::UserAgent> object:
      print $response->error_as_HTML;
  }
 
-=head1 METHODS
-
 C<HTTP::Response> is a subclass of C<HTTP::Message> and therefore
-inherits its methods.  The inherited methods are header(),
+inherits its methods.  The inherited methods often used are header(),
 push_header(), remove_header(), headers_as_string(), and content().
 The header convenience methods are also available.  See
 L<HTTP::Message> for details.
+
+The following additional methods are available:
+
+=over 4
 
 =cut
 
@@ -49,17 +51,19 @@ use URI::URL ();
 use strict;
 
 
-=head2 $r = new HTTP::Response ($rc, [$msg, [$header, [$content]]])
+=item $r = HTTP::Response->new($rc, [$msg, [$header, [$content]]])
 
 Constructs a new C<HTTP::Response> object describing a response with
-response code C<$rc> and optional message C<$msg>.
+response code C<$rc> and optional message C<$msg>.  The message is a
+short human readable single line string that explains the response
+code.
 
 =cut
 
 sub new
 {
     my($class, $rc, $msg, $header, $content) = @_;
-    my $self = bless new HTTP::Message $header, $content;
+    my $self = $class->SUPER::new($header, $content);
     $self->code($rc);
     $self->message($msg);
     $self;
@@ -69,7 +73,7 @@ sub new
 sub clone
 {
     my $self = shift;
-    my $clone = bless $self->HTTP::Message::clone;
+    my $clone = bless $self->SUPER::clone, ref($self);
     $clone->code($self->code);
     $clone->message($self->message);
     $clone->request($self->request->clone) if $self->request;
@@ -77,13 +81,13 @@ sub clone
     $clone;
 }
 
-=head2 $r->code([$code])
+=item $r->code([$code])
 
-=head2 $r->message([$message])
+=item $r->message([$message])
 
-=head2 $r->request([$request])
+=item $r->request([$request])
 
-=head2 $r->previous([$previousResponse])
+=item $r->previous([$previousResponse])
 
 These methods provide public access to the member variables.  The
 first two containing respectively the response code and the message
@@ -105,15 +109,23 @@ sub message   { shift->_elem('_msg',     @_); }
 sub previous  { shift->_elem('_previous',@_); }
 sub request   { shift->_elem('_request', @_); }
 
+=item $r->status_line
+
+Returns the string "E<lt>code> E<lt>message>".  If the message attribute
+is not set then the official name of E<lt>code> (see L<HTTP::Status>)
+is substituted.
+
+=cut
+
 sub status_line
 {
     my $self = shift;
     my $code = $self->{'_rc'}  || "000";
-    my $mess = $self->{'_msg'} || "?";
+    my $mess = $self->{'_msg'} || HTTP::Status::status_message($code) || "?";
     return "$code $mess";
 }
 
-=head2 $r->base
+=item $r->base
 
 Returns the base URL for this response.  The return value will be a
 reference to a URI::URL object.
@@ -164,9 +176,9 @@ sub base
 }
 
 
-=head2 $r->as_string()
+=item $r->as_string
 
-Method returning a textual representation of the request.  Mainly
+Method returning a textual representation of the response.  Mainly
 useful for debugging purposes. It takes no arguments.
 
 =cut
@@ -175,27 +187,34 @@ sub as_string
 {
     require HTTP::Status;
     my $self = shift;
-    my @result = ("--- $self ---");
+    my @result;
+    #push(@result, "---- $self ----");
     my $code = $self->code;
-    push(@result, "RC: $code (" . HTTP::Status::status_message($code) . ")" );
-    push(@result, 'Message: ' . $self->message);
-    push(@result, '');
+    my $status_message = HTTP::Status::status_message($code) || "Unknown code";
+    my $message = $self->message || "";
+
+    my $status_line = "$code";
+    my $proto = $self->protocol;
+    $status_line = "$proto $status_line" if $proto;
+    $status_line .= " ($status_message)" if $status_message ne $message;
+    $status_line .= " $message";
+    push(@result, $status_line);
     push(@result, $self->headers_as_string);
     my $content = $self->content;
-    if ($content) {
-	push(@result, $self->content);
+    if (defined $content) {
+	push(@result, $content);
     }
-    push(@result, ("-" x 35));
+    #push(@result, ("-" x 40));
     join("\n", @result, "");
 }
 
-=head2 $r->is_info
+=item $r->is_info
 
-=head2 $r->is_success
+=item $r->is_success
 
-=head2 $r->is_redirect
+=item $r->is_redirect
 
-=head2 $r->is_error
+=item $r->is_error
 
 These methods indicate if the response was informational, sucessful, a
 redirection, or an error.
@@ -208,7 +227,7 @@ sub is_redirect { HTTP::Status::is_redirect (shift->{'_rc'}); }
 sub is_error    { HTTP::Status::is_error    (shift->{'_rc'}); }
 
 
-=head2 $r->error_as_HTML()
+=item $r->error_as_HTML()
 
 Return a string containing a complete HTML document indicating what
 error occurred.  This method should only be called when $r->is_error
@@ -219,26 +238,21 @@ is TRUE.
 sub error_as_HTML
 {
     my $self = shift;
-    my $msg = $self->{'_msg'} || 'Unknown';
     my $title = 'An Error Occurred';
-    my $code = $self->code;
+    my $body  = $self->status_line;
     return <<EOM;
 <HTML>
-<HEAD>
-<TITLE>
-$title
-</TITLE>
-</HEAD>
+<HEAD><TITLE>$title</TITLE></HEAD>
 <BODY>
 <H1>$title</h1>
-$code - $msg
+$body
 </BODY>
 </HTML>
 EOM
 }
 
 
-=head2 $r->current_age
+=item $r->current_age
 
 This function will calculate the "current age" of the response as
 specified by E<lt>draft-ietf-http-v11-spec-07> section 13.2.3.  The
@@ -281,7 +295,7 @@ sub current_age
 }
 
 
-=head2 $r->freshness_lifetime
+=item $r->freshness_lifetime
 
 This function will calculate the "freshness lifetime" of the response
 as specified by E<lt>draft-ietf-http-v11-spec-07> section 13.2.4.  The
@@ -339,7 +353,7 @@ sub freshness_lifetime
 }
 
 
-=head2 $r->is_fresh
+=item $r->is_fresh
 
 Returns TRUE if the response is fresh, based on the values of
 freshness_lifetime() and current_age().  If the response is not longer
@@ -355,7 +369,7 @@ sub is_fresh
 }
 
 
-=head2 $r->fresh_until
+=item $r->fresh_until
 
 Returns the time when this entiy is no longer fresh.
 
@@ -367,5 +381,15 @@ sub fresh_until
     return $self->freshness_lifetime - $self->current_age + time;
 }
 
-
 1;
+
+=back 
+
+=head1 COPYRIGHT
+
+Copyright 1995-1997 Gisle Aas.
+
+This library is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=cut

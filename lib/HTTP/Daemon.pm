@@ -1,4 +1,4 @@
-# $Id: Daemon.pm,v 1.13 1996/11/13 13:22:21 aas Exp $
+# $Id: Daemon.pm,v 1.15 1997/11/26 10:44:08 aas Exp $
 #
 
 use strict;
@@ -60,7 +60,7 @@ to the I<IO::Socket::INET> base class.
 
 use vars qw($VERSION @ISA $PROTO);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.15 $ =~ /(\d+)\.(\d+)/);
 
 use IO::Socket ();
 @ISA=qw(IO::Socket::INET);
@@ -100,22 +100,21 @@ sub new
 }
 
 
-=item $c = $d->accept
+=item $c = $d->accept([$pkg])
 
 Same as I<IO::Socket::accept> but will return an
-I<HTTP::Daemon::ClientConn> reference.  It will return undef if you
-have specified a timeout and no connection is made within that time.
+I<HTTP::Daemon::ClientConn> reference by default.  It will return
+undef if you have specified a timeout and no connection is made within
+that time.
 
 =cut
 
 sub accept
 {
     my $self = shift;
-    my $sock = $self->SUPER::accept(@_);
-    if ($sock) {
-	$sock = bless $sock, "HTTP::Daemon::ClientConn";
-	${*$sock}{'httpd_daemon'} = $self;
-    }
+    my $pkg = shift || "HTTP::Daemon::ClientConn";
+    my $sock = $self->SUPER::accept($pkg);
+    ${*$sock}{'httpd_daemon'} = $self if $sock;
     $sock;
 }
 
@@ -203,7 +202,7 @@ sub get_request
 	    return undef unless select($fdset,undef,undef,$timeout);
 	}
 	my $n = sysread($self, $buf, 1024, length($buf));
-	return undef if $n == 0;  # unexpected EOF
+	return undef if !$n;  # unexpected EOF
 	if ($buf =~ /^\w+[^\n]+HTTP\/\d+\.\d+\015?\012/) {
 	    last READ_HEADER if $buf =~ /(\015?\012){2}/;
 	} elsif ($buf =~ /\012/) {
@@ -258,7 +257,7 @@ sub get_request
 			return undef unless select($fdset,undef,undef,$timeout);
 		    }
 		    my $n = sysread($self, $body, $missing, length($body));
-		    return undef if $n == 0;
+		    return undef if !$n;
 		    $missing -= $n;
 		}
 		substr($body, -2, 2) = ''; # remove CRLF at end
@@ -269,7 +268,7 @@ sub get_request
 		    return undef unless select($fdset,undef,undef,$timeout);
 		}
 		my $n = sysread($self, $buf, 2048, length($buf));
-		return undef if $n == 0;
+		return undef if !$n;
 	    }
 	}
 	$r->content($body);
@@ -287,7 +286,7 @@ sub get_request
 		    return undef unless select($fdset,undef,undef,$timeout);
 		}
 		my $n = sysread($self, $buf, 2048, length($buf));
-		return undef if $n == 0;
+		return undef if !$n;
 	    } else {
 		$buf =~ s/^([^\012]*)\012//;
 		$_ = $1;
@@ -320,7 +319,7 @@ sub get_request
 		return undef unless select($fdset,undef,undef,$timeout);
 	    }
 	    my $n = sysread($self, $buf, 2048, length($buf));
-	    return undef if $n == 0;
+	    return undef if !$n;
 	}
 	$r->content($buf);
 
@@ -333,7 +332,7 @@ sub get_request
 		return undef unless select($fdset,undef,undef,$timeout);
 	    }
 	    my $n = sysread($self, $buf, $len, length($buf));
-	    return undef if $n == 0;
+	    return undef if !$n;
 	    $len -= $n;
 	}
 	$r->content($buf);
@@ -543,7 +542,7 @@ sub send_file
     my $buf = "";
     my $n;
     while ($n = sysread($file, $buf, 8*1024)) {
-	last if $n <= 0;
+	last if !$n;
 	$cnt += $n;
 	print $self $buf;
     }

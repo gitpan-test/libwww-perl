@@ -1,3 +1,44 @@
+2003-10-13   Gisle Aas <gisle@ActiveState.com>
+
+    Release 5.70
+
+    File::Listing::apache by Slaven Rezic <slaven@rezic.de>
+
+    HEAD requests now work properly for ftp: URLs.
+    Patch by Ville Skyttä <ville.skytta@iki.fi>.
+
+    LWP::UserAgent: The protocols_allowed() and protocols_forbidden()
+    methods are now case insensitive.  Patch by Ville Skyttä
+    <ville.skytta@iki.fi>.
+
+    Avoid warning from HTTP::Date on certain invalid dates.
+    Patch by David Dick <david_dick@iprimus.com.au>.
+
+    HTML::Form::param() is an alternative interface for inspecting
+    and modifying the form values.  It resembles the interface
+    of CGI.
+
+    HTML::Form documentation updated.  Lots of typo fixes and improves
+    by Martin Thurn <mthurn@northropgrumman.com>.
+
+    HTML::Form will treat any unknown input types as text input.
+    This appears to be what most browsers do.
+
+    HTML::Form::parse() can now take a HTTP::Response object
+    as argument.
+
+    The "checkbox" and "option" inputs of HTML::Form can now be
+    turned on with the new check() method.
+
+    The inputs of HTML::Form can now track alternative value
+    names and allow values to be set by these names as well.
+    Currently this is only supported for "option" inputs.
+
+    HTML::Form's dump() method now print the name of the form if
+    present.
+
+
+
 2003-01-24   Gisle Aas <gisle@ActiveState.com>
 
     Release 5.69

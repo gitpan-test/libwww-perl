@@ -1,6 +1,6 @@
 #!perl -w
 
-print "1..14\n";
+print "1..20\n";
 
 use strict;
 use HTML::Form;
@@ -23,7 +23,8 @@ print "not " unless @f == 2;
 print "ok 2\n";
 
 my $f = shift @f;
-print "not " unless defined($f->value("name")) && $f->value("name") eq "";
+print "not " unless defined($f->value("name")) && $f->value("name") eq "" &&
+                    $f->dump eq "GET http://localhost/abc [foo]\n  name=\n";
 print "ok 3\n";
 
 my $req = $f->click;
@@ -91,10 +92,10 @@ EOT
 
 print "not " unless $f->click->as_string eq <<'EOT'; print "ok 10\n";
 POST http://localhost/
-Content-Length: 73
+Content-Length: 76
 Content-Type: application/x-www-form-urlencoded
 
-i.x=1&i.y=1&c=on&r=b&t=&p=&h=xyzzy&f=foo.txt&a=%0Aabc%0A+++&s=bar&m=a&m=b
+i.x=1&i.y=1&c=on&r=b&t=&p=&h=xyzzy&f=foo.txt&x=&a=%0Aabc%0A+++&s=bar&m=a&m=b
 EOT
 
 print "not " unless @warn == 1 && $warn[0] =~ /^Unknown input type 'xyzzy'/;
@@ -155,3 +156,71 @@ unlink($filename) || warn "Can't unlink '$filename': $!";
 
 print "not " if @warn;
 print "ok 14\n";
+
+# Try to parse form HTTP::Response directly
+{
+    package MyResponse;
+    use vars qw(@ISA);
+    require HTTP::Response;
+    @ISA = ('HTTP::Response');
+
+    sub base { "http://www.example.com" }
+}
+my $response = MyResponse->new(200, 'OK');
+$response->content("<form><input type=text value=42 name=x></form>");
+
+$f = HTML::Form->parse($response);
+
+print "not " unless $f->click->as_string eq <<"EOT"; print "ok 15\n";
+GET http://www.example.com?x=42
+
+
+EOT
+
+$f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<form>
+   <input type=checkbox name=x> I like it!
+</form>
+EOT
+
+$f->find_input("x")->check;
+
+print "not " unless $f->click->as_string eq <<"EOT"; print "ok 16\n";
+GET http://www.example.com?x=on
+
+
+EOT
+
+$f->value("x", "off");
+print "not " unless $f->click->as_string eq <<"EOT"; print "ok 17\n";
+GET http://www.example.com
+
+
+EOT
+
+$f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<form>
+<select name=x>
+   <option value=1>one
+   <option value=2>two
+   <option>3
+</select>
+</form>
+EOT
+
+$f->value("x", "one");
+print "not " unless $f->click->as_string eq <<"EOT"; print "ok 18\n";
+GET http://www.example.com?x=1
+
+
+EOT
+
+$f->value("x", "TWO");
+print "not " unless $f->click->as_string eq <<"EOT"; print "ok 19\n";
+GET http://www.example.com?x=2
+
+
+EOT
+
+print "not " unless join(":", $f->find_input("x")->value_names) eq "one:two:3";
+print "ok 20\n";

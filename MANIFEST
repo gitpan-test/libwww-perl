@@ -73,11 +73,14 @@ t/base/listing.t		Test File::Listing module
 t/base/mediatypes.t		Test LWP::MediaTypes module
 t/base/message.t		Test HTTP::Request/HTTP::Response
 t/base/negotiate.t		Test HTTP::Negotiation module
+t/base/protocols.t		Test protocol methods of LWP::UserAgent
 t/base/response.t		Test additional HTTP::Response methods
 t/base/status.t			Test HTTP::Status module
 t/base/ua.t			Basic LWP::UserAgent tests
 t/html/form.t			Test HTML::Form module
+t/html/form-param.t		More HTML::Form tests.
 t/live/activestate.t
+t/live/apache-listing.t		Test File::Listing::apache package
 t/live/jigsaw-auth-b.t
 t/live/jigsaw-auth-d.t
 t/live/jigsaw-chunk.t

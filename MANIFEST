@@ -9,42 +9,13 @@ bin/lwp-request.PL		Writes bin/lwp-request script
 bin/lwp-rget.PL			Writes bin/lwp-rget script
 lwpcook.pod			Libwww-perl examples
 lib/Bundle/LWP.pm               Defines prereq modules
-lib/File/CounterFile.pm		Persistent counter class
 lib/File/Listing.pm		Parse directory listings
-lib/Font/AFM.pm			Parse Adobe Font Metric files
-lib/Font/Metrics/Courier.pm	Generated from the AFM file by make_metrics.pl
-lib/Font/Metrics/CourierBold.pm	
-lib/Font/Metrics/CourierBoldOblique.pm	
-lib/Font/Metrics/CourierOblique.pm	
-lib/Font/Metrics/Helvetica.pm		
-lib/Font/Metrics/HelveticaBold.pm	
-lib/Font/Metrics/HelveticaBoldOblique.pm
-lib/Font/Metrics/HelveticaOblique.pm	
-lib/Font/Metrics/TimesBold.pm		
-lib/Font/Metrics/TimesBoldItalic.pm	
-lib/Font/Metrics/TimesItalic.pm		
-lib/Font/Metrics/TimesRoman.pm		
-lib/Font/make_metrics.pl	Writes font metric modules
-lib/HTML/AsSubs.pm		Cool interface for constructing HTML
-lib/HTML/Element.pm		Class that represents an HTML element
-lib/HTML/Entities.pm		Entities encoding/decoding routines
-lib/HTML/Filter.pm              Identity filter for HTML text
-lib/HTML/FormatPS.pm		Postscript formatter
-lib/HTML/FormatText.pm		Text only formatter
-lib/HTML/Formatter.pm		Generic formatter base class
-lib/HTML/HeadParser.pm		Specialized parser for HTML <HEAD> content
-lib/HTML/LinkExtor.pm		Extract links from an HTML document
-lib/HTML/Parse.pm               Depreciated TreeBuilder interface
-lib/HTML/Parser.pm		Parse SGML text
-lib/HTML/TreeBuilder.pm		Builds a HTML syntax tree
-lib/HTML/HTML32.dtd		The SGML DTD
-lib/HTML/ISOlat1.sgml           Included by the SGML DTD
-lib/HTML/dtd2pm.pl		Writes a perl module
-lib/HTML/ent.pl                 Convert entities
 lib/HTTP/Cookies.pm             Cookie storage and management
 lib/HTTP/Daemon.pm		A simple httpd
 lib/HTTP/Date.pm		Date conversion routines
 lib/HTTP/Headers.pm		Class encapsulating HTTP Message headers
+lib/HTTP/Headers/Auth.pm	Some methods that deal with authorization.
+lib/HTTP/Headers/ETag.pm	Some methods that deal with entity tags
 lib/HTTP/Headers/Util.pm        Some utility functions for header values.
 lib/HTTP/Message.pm		Class encapsulating HTTP messages
 lib/HTTP/Negotiate.pm		Evaluate HTTP content negotiation algoritm
@@ -97,11 +68,12 @@ lib/WWW/RobotRules.pm		Parse robot.txt files
 lib/WWW/RobotRules/AnyDBM_File.pm	Persistent robot rules
 t/README			How to run and set up tests
 t/TEST				Run tests
-t/base/afm.t			Test Font::AFM module
 t/base/common-req.t		Test HTTP::Request::Common module
 t/base/cookies.t                Test HTTP::Cookies module
 t/base/date.t			Test HTTP::Date module
 t/base/headers.t		Test HTTP::Headers module
+t/base/headers-auth.t		Test HTTP::Headers::Auth module
+t/base/headers-etag.t		Test HTTP::Headers::ETag module
 t/base/headers-util.t		Test HTTP::Headers::Util module
 t/base/listing.t		Test File::Listing module
 t/base/mediatypes.t		Test LWP::MediaTypes module
@@ -109,13 +81,6 @@ t/base/message.t		Test HTTP::Request/HTTP::Response
 t/base/negotiate.t		Test HTTP::Negotiation module
 t/base/response.t		Test additional HTTP::Response methods
 t/base/status.t			Test HTTP::Status module
-t/html/entities.t		Test HTML::Entities module
-t/html/filter.t			Test HTML::Filter module
-t/html/parser.t			Test HTML::Parser module
-t/html/parsefile.t              Test parsing from file
-t/html/headparser.t             Test HTML::HeadParser module
-t/html/linkextractor.t		Test HTML::LinkExtor module
-t/html/split.t                  Test incremental parsing
 t/local/autoload.t		Test autoloading of LWP::Protocol modules
 t/local/get.t			Try to get a local file
 t/local/http.t			Test http to local server

@@ -1,11 +1,11 @@
 package Net::HTTP;
 
-# $Id: HTTP.pm,v 1.39 2001/12/03 22:04:54 gisle Exp $
+# $Id: HTTP.pm,v 1.43 2002/12/26 09:13:53 gisle Exp $
 
 use strict;
 use vars qw($VERSION @ISA);
 
-$VERSION = "0.04";
+$VERSION = "1.00";
 eval { require IO::Socket::INET } || require IO::Socket;
 require Net::HTTP::Methods;
 
@@ -27,12 +27,7 @@ __END__
 
 =head1 NAME
 
-Net::HTTP - Low-level HTTP client connection
-
-=head1 NOTE
-
-This module is experimental.  Details of its interface is likely to
-change in the future.
+Net::HTTP - Low-level HTTP connection (client)
 
 =head1 SYNOPSIS
 
@@ -44,6 +39,7 @@ change in the future.
  while (1) {
     my $buf;
     my $n = $s->read_entity_body($buf, 1024);
+    die "read failed: $!" unless defined $n;
     last unless $n;
     print $buf;
  }
@@ -52,7 +48,8 @@ change in the future.
 
 The C<Net::HTTP> class is a low-level HTTP client.  An instance of the
 C<Net::HTTP> class represents a connection to an HTTP server.  The
-HTTP protocol is described in RFC 2616.
+HTTP protocol is described in RFC 2616.  The C<Net::HTTP> class
+support C<HTTP/1.0> and C<HTTP/1.1>.
 
 C<Net::HTTP> is a sub-class of C<IO::Socket::INET>.  You can mix the
 methods described below with reading and writing from the socket
@@ -66,8 +63,8 @@ C<IO::Socket::INET>):
 
 =item $s = Net::HTTP->new( %options )
 
-The C<Net::HTTP> constructor takes the same options as
-C<IO::Socket::INET> as well as these:
+The C<Net::HTTP> constructor method takes the same options as
+C<IO::Socket::INET>'s as well as these:
 
   Host:            Initial host attribute value
   KeepAlive:       Initial keep_alive attribute value
@@ -76,6 +73,16 @@ C<IO::Socket::INET> as well as these:
   PeerHTTPVersion: Initial peer_http_version attribute value
   MaxLineLength:   Initial max_line_length attribute value
   MaxHeaderLines:  Initial max_header_lines attribute value
+
+The C<Host> option is also the default for C<IO::Socket::INET>'s
+C<PeerAddr>.  The C<PeerPort> defaults to 80 if not provided.
+
+The C<Listen> option provided by C<IO::Socket::INET>'s constructor
+method is not allowed.
+
+If unable to connect to the given HTTP server then the constructor
+returns C<undef> and $@ contains the reason.  After a successful
+connect, a C<Net:HTTP> object is returned.
 
 =item $s->host
 
@@ -136,6 +143,10 @@ header is automatically added unless it was already present.
 Format and send a request message.  Arguments are the same as for
 format_request().  Returns true if successful.
 
+=item $s->format_chunk( $data )
+
+Returns the string to be written for the given chunk of data.  
+
 =item $s->write_chunk($data)
 
 Will write a new chunk of request entity body data.  This method
@@ -146,11 +157,12 @@ body data.
 
 Returns true if successful.
 
-=item $s->format_chunk($data)
+=item $s->format_chunk_eof( %trailers )
 
-Returns the string to be written for the given chunk of data.
+Returns the string to be written for signaling EOF when a
+C<Transfer-Encoding> of C<chunked> is used.
 
-=item $s->write_chunk_eof(%trailers)
+=item $s->write_chunk_eof( %trailers )
 
 Will write eof marker for chunked data and optional trailers.  Note
 that trailers should not really be used unless is was signaled
@@ -158,48 +170,55 @@ with a C<Trailer> header.
 
 Returns true if successful.
 
-=item $s->format_chunk_eof(%trailers)
-
-Returns the string to be written for signaling EOF.
-
 =item ($code, $mess, %headers) = $s->read_response_headers( %opts )
 
-Read response headers from server.  The $code is the 3 digit HTTP
-status code (see L<HTTP::Status>) and $mess is the textual message
-that came with it.  Headers are then returned as key/value pairs.
-Since key letter casing is not normalized and the same key can occur
-multiple times, assigning these values directly to a hash might be
-risky.
+Read response headers from server and return it.  The $code is the 3
+digit HTTP status code (see L<HTTP::Status>) and $mess is the textual
+message that came with it.  Headers are then returned as key/value
+pairs.  Since key letter casing is not normalized and the same key can
+even occur multiple times, assigning these values directly to a hash
+is not wise.  Only the $code is returned if this method is called in
+scalar context.
 
 As a side effect this method updates the 'peer_http_version'
 attribute.
 
-The method will raise exceptions (die) if the server does not speak
-proper HTTP.
-
 Options might be passed in as key/value pairs.  There are currently
 only two options supported; C<laxed> and C<junk_out>.
 
-The C<laxed> option will make C<read_response_headers> more forgiving
+The C<laxed> option will make read_response_headers() more forgiving
 towards servers that have not learned how to speak HTTP properly.  The
-<laxed> option is a boolean flag, and is enabled by passing in a TRUE
+C<laxed> option is a boolean flag, and is enabled by passing in a TRUE
 value.  The C<junk_out> option can be used to capture bad header lines
 when C<laxed> is enabled.  The value should be an array reference.
 Bad header lines will be pushed onto the array.
 
+The C<laxed> option must be specified in order to communicate with
+pre-HTTP/1.0 servers that don't describe the response outcome or the
+data they send back with a header block.  For these servers
+peer_http_version is set to "0.9" and this method returns (200,
+"Assumed OK").
+
+The method will raise an exception (die) if the server does not speak
+proper HTTP or if the C<max_line_length> or C<max_header_length>
+limits are reached.  If the C<laxed> option is turned on and
+C<max_line_length> and C<max_header_length> checks are turned off,
+then no exception will be raised and this method will always
+return a response code.
+
 =item $n = $s->read_entity_body($buf, $size);
 
 Reads chunks of the entity body content.  Basically the same interface
-as for read() and sysread(), but buffer offset is not supported yet.
-This method should only be called after a successful
+as for read() and sysread(), but the buffer offset argument is not
+supported yet.  This method should only be called after a successful
 read_response_headers() call.
 
-The return value will be C<undef> on errors, 0 on EOF, -1 if no data
-could be returned this time, and otherwise the number of bytes added
-to $buf.
+The return value will be C<undef> on read errors, 0 on EOF, -1 if no data
+could be returned this time, otherwise the number of bytes assgined
+to $buf.  The $buf set to "" when the return value is -1.
 
-This method might raise exceptions (die) if the server does not speak
-proper HTTP.
+This method will raise exceptions (die) if the server does not speak
+proper HTTP.  This can only happen when reading chunked data.
 
 =item %headers = $s->get_trailers
 
@@ -215,7 +234,12 @@ they read too much, the remaining data will be left in this buffer.
 
 =item $s->_rbuf_length
 
-Returns the number of bytes in the read buffer.
+Returns the number of bytes in the read buffer.  This should always be
+the same as:
+
+    length($s->_rbuf)
+
+but might be more efficient.
 
 =back
 
@@ -234,7 +258,7 @@ L<LWP>, L<IO::Socket::INET>, L<Net::HTTP::NB>
 
 =head1 COPYRIGHT
 
-Copyright 2001 Gisle Aas.
+Copyright 2001-2003 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

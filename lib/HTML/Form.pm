@@ -5,14 +5,14 @@ use URI;
 use Carp ();
 
 use vars qw($VERSION);
-$VERSION='0.03';
+
+$VERSION='1.00';
 
 my %form_tags = map {$_ => 1} qw(input textarea button select option);
 
 my %type2class = (
  text     => "TextInput",
  password => "TextInput",
- file     => "TextInput",
  hidden   => "TextInput",
  textarea => "TextInput",
 
@@ -25,11 +25,12 @@ my %type2class = (
 
  submit   => "SubmitInput",
  image    => "ImageInput",
+ file     => "FileInput",
 );
 
 =head1 NAME
 
-HTML::Form - Class that represents HTML forms
+HTML::Form - Class that represents an HTML form element
 
 =head1 SYNOPSIS
 
@@ -37,46 +38,30 @@ HTML::Form - Class that represents HTML forms
  $form = HTML::Form->parse($html, $base_uri);
  $form->value(query => "Perl");
 
- use LWP;
- LWP::UserAgent->new->request($form->click);
+ use LWP::UserAgent;
+ $ua = LWP::UserAgent->new;
+ $response = $ua->request($form->click);
 
 =head1 DESCRIPTION
 
-Objects of the C<HTML::Form> class represents a single HTML <form>
-... </form> instance.  A form consist of a sequence of inputs that
-usually have names, and which can take on various values.
+Objects of the C<HTML::Form> class represents a single HTML
+C<E<lt>formE<gt> ... E<lt>/formE<gt>> instance.  A form consist of a
+sequence of inputs that usually have names, and which can take on
+various values.  The state of a form can be tweaked and it can then be
+asked to provide HTTP::Request objects that can be passed to LWP.
 
-The following methods are available:
+The following constructor methods are available:
 
 =over 4
 
-=item $form = HTML::Form->new($method, $action_uri, [[$enctype], $input,...])
-
-The constructor takes a $method and a $uri as argument.  The $enctype
-and and initial inputs are optional.  You will normally use
-HTML::Form->parse() to create new HTML::Form objects.
-
-=cut
-
-sub new {
-    my $class = shift;
-    my $self = bless {}, $class;
-    $self->{method} = uc(shift  || "GET");
-    $self->{action} = shift  || Carp::croak("No action defined");
-    $self->{enctype} = shift || "application/x-www-form-urlencoded";
-    $self->{inputs} = [@_];
-    $self;
-}
-
-
-=item @forms = HTML::Form->parse($html_document, $base_uri)
+=item @forms = HTML::Form->parse( $html_document, $base_uri )
 
 The parse() class method will parse an HTML document and build up
-C<HTML::Form> objects for each <form> found.  If called in scalar
+C<HTML::Form> objects for each <form> element found.  If called in scalar
 context only returns the first <form>.  Returns an empty list if there
 are no forms to be found.
 
-The $base_uri is (usually) the URI used to access the $html_document.
+The $base_uri is (usually) the URI used to retrieve the $html_document.
 It is needed to resolve relative action URIs.  For LWP this parameter
 is obtained from the $response->base() method.
 
@@ -101,10 +86,10 @@ sub parse
 	    my $action = delete $attr->{'action'};
 	    $action = "" unless defined $action;
 	    $action = URI->new_abs($action, $base_uri);
-	    $f = $class->new(delete $attr->{'method'},
+	    $f = $class->new($attr->{'method'},
 			     $action,
-			     delete $attr->{'enctype'});
-	    $f->{extra_attr} = $attr;
+			     $attr->{'enctype'});
+	    $f->{attr} = $attr;
 	    push(@forms, $f);
 	    while (my $t = $p->get_tag) {
 		my($tag, $attr) = @$t;
@@ -148,11 +133,31 @@ sub parse
     wantarray ? @forms : $forms[0];
 }
 
-=item $form->push_input($type, \%attr)
+=item $form = HTML::Form->new( $method, $action_uri, $enctype )
 
-Adds a new input to the form.
+This constructs a new empty HTML::Form object.  The arguments are the
+initial value for which method the form should use to invoke a
+request, which URI to apply the method to, and what encoding type to
+use for the form data.
+
+The $method defaults to "GET" if not provided.  The $enctype defaults
+to "application/x-www-form-urlencoded" if not provided.
+
+You will normally use HTML::Form->parse() to create new HTML::Form
+objects.
 
 =cut
+
+sub new {
+    my $class = shift;
+    my $self = bless {}, $class;
+    $self->{method} = uc(shift  || "GET");
+    $self->{action} = shift  || Carp::croak("No action defined");
+    $self->{enctype} = lc(shift || "application/x-www-form-urlencoded");
+    $self->{inputs} = [@_];
+    $self;
+}
+
 
 sub push_input
 {
@@ -171,14 +176,32 @@ sub push_input
 }
 
 
-=item $form->method( [$new] )
+=back
 
-=item $form->action( [$new] )
+The following instance methods are available on C<HTML::Form> objects:
 
-=item $form->enctype( [$new] )
+=over 4
 
-These method can be used to get/set the corresponding attribute of the
-form.
+=item $method = $form->method
+
+=item $form->method( $new_method )
+
+This method is gets/sets the I<method> used to for the
+C<HTTP::Request> generated.  It is a string like "GET" or "POST".
+
+=item $action = $form->action
+
+=item $form->action( $new_action )
+
+This method gets/sets the URI which we want to apply the request
+I<method> to.
+
+=item $enctype = $form->enctype
+
+=item $form->enctype( $new_enctype )
+
+This method gets/sets the encoding type for the form data.  It is a
+string like "application/x-www-form-urlencoded" or "multipart/form-data".
 
 =cut
 
@@ -197,10 +220,36 @@ BEGIN {
     *uri = \&action;  # alias
 }
 
+=item $value = $form->attr( $name )
 
-=item $form->inputs
+=item $form->attr( $name, $new_value )
 
-This method returns the list of inputs in the form.
+This method give access to the original HTML attributes of the <form> tag.
+The $name should always be passed in lower case.
+
+Example:
+
+   @f = HTML::Form->parse( $html, $foo );
+   @f = grep $_->attr("id") == "foo", @f;
+   die "No form named 'foo' found" unless @f;
+   $foo = shift @f;
+
+=cut
+
+sub attr {
+    my $self = shift;
+    my $name = shift;
+    return undef unless defined $name;
+
+    my $old = $self->{attr}{$name};
+    $self->{attr}{$name} = shift if @_;
+    return $old;
+}
+
+=item @inputs = $form->inputs
+
+This method returns the list of inputs in the form.  If called in
+scalar context it returns the number of inputs contained in the form.
 
 =cut
 
@@ -211,17 +260,21 @@ sub inputs
 }
 
 
-=item $form->find_input($name, $type, $no)
+=item $input = $form->find_input($name, $type, $index)
 
 This method is used to locate some specific input within the form.  At
 least one of the arguments must be defined.  If no matching input is
 found, C<undef> is returned.
 
 If $name is specified, then the input must have the indicated name.
-If $type is specified then the input must have the specified type.  In
-addition to the types possible for <input> HTML tags, we also have
-"textarea" and "option".  The $no is the sequence number of the input
-with the indicated $name and/or $type (where 1 is the first).
+
+If $type is specified then the input must have the specified type.
+The following type names are used: "text", "password", "hidden",
+"textarea", "file", "image", "submit", "radio", "checkbox" and "option".
+
+The $index is the sequence number of the input matched where 1 is the
+first.  If combined with $name and/or $type then it select the I<n>th
+input with the given name and/or type.
 
 =cut
 
@@ -238,7 +291,7 @@ sub find_input
 	next if --$no;
 	return $_;
     }
-    return;
+    return undef;
 }
 
 sub fixup
@@ -250,10 +303,23 @@ sub fixup
 }
 
 
-=item $form->value($name, [$value])
+=item $value = $form->value( $name )
+
+=item $form->value( $name, $new_value )
 
 The value() method can be used to get/set the value of some input.  If
 no input have the indicated name, then this method will croak.
+
+If multiple inputs has the same name, only the first one will be
+affected.
+
+The call:
+
+    $form->value('foo')
+
+is a short-hand for:
+
+    $form->find_value('foo')->value;
 
 =cut
 
@@ -268,11 +334,13 @@ sub value
 }
 
 
-=item $form->try_others(\&callback)
+=item $form->try_others( \&callback )
 
 This method will iterate over all permutations of unvisited enumerated
 values (<select>, <radio>, <checkbox>) and invoke the callback for
-each.  The callback is passed the $form as argument.
+each.  The callback is passed the $form as argument.  The return value
+from the callback is ignored and the try_others() method itself does
+not return anything.
 
 =cut
 
@@ -300,10 +368,10 @@ sub _try
 }
 
 
-=item $form->make_request
+=item $request = $form->make_request
 
-Will return a HTTP::Request object that reflects the current setting
-of the form.  You might want to use the click method instead.
+Will return an C<HTTP::Request> object that reflects the current setting
+of the form.  You might want to use the click() method instead.
 
 =cut
 
@@ -330,12 +398,37 @@ sub make_request
 }
 
 
-=item $form->click([$name], [$x, $y])
+=item $request = $form->click
 
-Will click on the first clickable input (C<input/submit> or
-C<input/image>), with the indicated $name, if specified.  You can
-optinally specify a coordinate clicked, which only makes a difference
-if you clicked on an image.  The default coordinate is (1,1).
+=item $request = $form->click( $name )
+
+=item $request = $form->click( $x, $y )
+
+=item $request = $form->click( $name, $x, $y )
+
+Will "click" on the first clickable input (which will be of type
+C<submit> or C<image>).  The result of clicking is an C<HTTP::Request>
+object that can then be passed to C<LWP::UserAgent> if you want to
+obtain the server response.
+
+If a $name is specified we will click on the first clickable input
+with the given name, and the method will croak if no clickable input
+with the given name is found.  If $name is I<not> specified, then it
+is ok if the form contains no clickable inputs.  In this case the
+click() method returns the same request as the make_request() method
+would do.
+
+If there is multiple clickable inputs with the same name, then there
+is no way to get the click() method of the C<HTML::Form> to click on
+any but the first.  If you need this you would have to locate the
+input with find_input() and invoke the click() method on the given
+input yourself.
+
+A click coordinate pair can also be provided, but this only makes a
+difference if you clicked on an image.  The default coordinate is
+(1,1).  The upper-left corner of the image is (0,0), but some badly
+coded CGI scripts are known to not recognize this so (1,1) was
+selectes as a safer default.
 
 =cut
 
@@ -356,24 +449,29 @@ sub click
 }
 
 
-=item $form->form
+=item @kw = $form->form
 
-Returns the current setting as a sequence of key/value pairs.
+Returns the current setting as a sequence of key/value pairs.  Note
+that keys might be repeated which means that some values might be lost
+if the return values are assigned to a hash.
+
+In scalar context this method returns the number of key/value pairs
+generated.
 
 =cut
 
 sub form
 {
     my $self = shift;
-    map {$_->form_name_value} @{$self->{'inputs'}};
+    map { $_->form_name_value($self) } @{$self->{'inputs'}};
 }
 
 
 =item $form->dump
 
-Returns a textual representation of the form.  Mainly useful for
-debugging.  If called in void context, then the dump is printed on
-STDERR.
+Returns a textual representation of current state of the form.  Mainly
+useful for debugging.  If called in void context, then the dump is
+printed on STDERR.
 
 =cut
 
@@ -385,7 +483,7 @@ sub dump
     my $enctype = $self->{'enctype'};
     my $dump = "$method $uri";
     $dump .= " ($enctype)"
-	if $enctype eq "application/xxx-www-form-urlencoded";
+	if $enctype ne "application/x-www-form-urlencoded";
     $dump .= "\n";
     for ($self->inputs) {
 	$dump .= "  " . $_->dump . "\n";
@@ -430,9 +528,9 @@ sub fixup {}
 
 =item $input->type
 
-Returns the type of this input.  Types are stuff like "text",
-"password", "hidden", "textarea", "image", "submit", "radio",
-"checkbox", "option"...
+Returns the type of this input.  The type is one of the following
+strings: "text", "password", "hidden", "textarea", "file", "image", "submit",
+"radio", "checkbox" or "option".
 
 =cut
 
@@ -441,14 +539,23 @@ sub type
     shift->{type};
 }
 
-=item $input->name([$new])
+=item $name = $input->name
 
-=item $input->value([$new])
+=item $input->name( $new_name )
 
-These methods can be used to set/get the current name or value of an
-input.  If the input only can take an enumerated list of values, then
-it is an error to try to set it to something else and the method will
-croak if you try.
+This method can be used to get/set the current name of the input.
+
+=item $value = $input->value
+
+=item $input->value( $new_value )
+
+This method can be used to get/set the current value of an
+input.
+
+If the input only can take an enumerated list of values, then it is an
+error to try to set it to something else and the method will croak if
+you try.  A croak will also be triggered if you try to set the value
+of a read-only input.
 
 =cut
 
@@ -542,19 +649,21 @@ package HTML::Form::TextInput;
 
 #input/text
 #input/password
-#input/file
 #input/hidden
 #textarea
 
 sub value
 {
     my $self = shift;
+    my $old = $self->{value};
+    $old = "" unless defined $old;
     if (@_) {
 	if (exists($self->{readonly}) || $self->{type} eq "hidden") {
 	    Carp::carp("Input '$self->{name}' is readonly") if $^W;
 	}
+	$self->{value} = shift;
     }
-    $self->SUPER::value(@_);
+    $old;
 }
 
 #---------------------------------------------------
@@ -714,6 +823,113 @@ sub form_name_value
 	   );
 }
 
+#---------------------------------------------------
+package HTML::Form::FileInput;
+@HTML::Form::FileInput::ISA=qw(HTML::Form::TextInput);
+
+=back
+
+If the input is of type C<file>, then it has these additional methods:
+
+=over 4
+
+=item $input->file
+
+This is just an alias for the value() method.  It sets the filename to
+read data from.
+
+=cut
+
+sub file {
+    my $self = shift;
+    $self->value(@_);
+}
+
+=item $filename = $input->filename
+
+=item $input->filename( $new_filename )
+
+This get/sets the filename reported to the server during file upload.
+This attribute defaults to the value reported by the file() method.
+
+=cut
+
+sub filename {
+    my $self = shift;
+    my $old = $self->{filename};
+    $self->{filename} = shift if @_;
+    $old = $self->file unless defined $old;
+    $old;
+}
+
+=item $content = $input->content
+
+=item $input->content( $new_content )
+
+This get/sets the file content provided to the server during file
+upload.  This method can be used if you do not want the content to be
+uploaded to be provided from an actual file.
+
+=cut
+
+sub content {
+    my $self = shift;
+    my $old = $self->{content};
+    $self->{content} = shift if @_;
+    $old;
+}
+
+=item @headers = $input->headers
+
+=item input->headers($key => $value, .... )
+
+This get/set additional header fields describing the file uploaded.
+This can for instance be used to set the C<Content-Type> reported for
+the file.
+
+=cut
+
+sub headers {
+    my $self = shift;
+    my $old = $self->{headers} || [];
+    $self->{headers} = [@_] if @_;
+    @$old;
+}
+
+sub form_name_value {
+    my($self, $form) = @_;
+    return $self->SUPER::form_name_value($form)
+	if $form->method ne "POST" ||
+	   $form->enctype ne "multipart/form-data";
+
+    my $name = $self->name;
+    return unless defined $name;
+
+    my $file = $self->file;
+    my $filename = $self->filename;
+    my @headers = $self->headers;
+    my $content = $self->content;
+    if (defined $content) {
+	$filename = $file unless defined $filename;
+	$file = undef;
+	unshift(@headers, "Content" => $content);
+    }
+    elsif (!defined($file) || length($file) == 0) {
+	return;
+    }
+
+    # legacy (this used to be the way to do it)
+    if (ref($file) eq "ARRAY") {
+	my $f = shift @$file;
+	my $fn = shift @$file;
+	push(@headers, @$file);
+	$file = $f;
+	$filename = $fn unless defined $filename;
+    }
+
+    return ($name => [$file, $filename, @headers]);
+}
+
 1;
 
 __END__
@@ -722,11 +938,11 @@ __END__
 
 =head1 SEE ALSO
 
-L<LWP>, L<HTML::Parser>, L<webchatpp>
+L<LWP>, L<HTML::Parser>
 
 =head1 COPYRIGHT
 
-Copyright 1998-2000 Gisle Aas.
+Copyright 1998-2002 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

@@ -3,7 +3,6 @@ MANIFEST			This file
 Makefile.PL			Makefile generator
 README				Get you started with this package
 README.SSL			When you need SSL support
-TODO				The To-Do list for the library
 bin/lwp-download             	Writes bin/lwp-download script
 bin/lwp-mirror			Writes bin/lwp-mirror script
 bin/lwp-request			Writes bin/lwp-request script
@@ -13,6 +12,7 @@ lib/File/Listing.pm		Parse directory listings
 lib/HTML/Form.pm                Parse <form>...</form>
 lib/HTTP/Cookies.pm             Cookie storage and management
 lib/HTTP/Cookies/Netscape.pm    Deal with the Netscape cookie file format
+lib/HTTP/Cookies/Microsoft.pm   Deal with the Microsoft MSIE cookie file format
 lib/HTTP/Daemon.pm		A simple httpd
 lib/HTTP/Date.pm		Date conversion routines
 lib/HTTP/Headers.pm		Class encapsulating HTTP Message headers
@@ -91,7 +91,6 @@ t/local/autoload.t		Test autoloading of LWP::Protocol modules
 t/local/get.t			Try to get a local file
 t/local/http-get.t
 t/local/http.t			Test http to local server
-t/local/httpsub.t
 t/local/protosub.t              Test with other protocol module
 t/net/cgi-bin/moved
 t/net/cgi-bin/nph-slowdata

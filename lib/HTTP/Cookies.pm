@@ -6,7 +6,7 @@ use HTTP::Headers::Util qw(split_header_words join_header_words);
 use LWP::Debug ();
 
 use vars qw($VERSION $EPOCH_OFFSET);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
 
 # Legacy: because "use "HTTP::Cookies" used be the ONLY way
 #  to load the class HTTP::Cookies::Netscape.
@@ -80,7 +80,7 @@ parameters are recognized:
   file:            name of the file to restore cookies from and save cookies to
   autosave:        save during destruction (bool)
   ignore_discard:  save even cookies that are requested to be discarded (bool)
-  hide_cookie2:    don't add Cookie2 header to requests
+  hide_cookie2:    do not add Cookie2 header to requests
 
 Future parameters might include (not yet implemented):
 
@@ -137,6 +137,13 @@ sub add_cookie_header
         LWP::Debug::debug("Checking $domain for cookies");
 	my $cookies = $self->{COOKIES}{$domain};
 	next unless $cookies;
+	if ($self->{delayload} && defined($cookies->{'//+delayload'})) {
+	    my $cookie_data = $cookies->{'//+delayload'}{'cookie'};
+	    delete $self->{COOKIES}{$domain};
+	    $self->load_cookie($cookie_data->[1]);
+	    $cookies = $self->{COOKIES}{$domain};
+	    next unless $cookies;  # should not really happen
+	}
 
 	# Want to add cookies corresponding to the most specific paths
 	# first (i.e. longest path first)
@@ -291,8 +298,14 @@ sub extract_cookies
 	    my $expires;
 	    for $param (split(/;\s*/, $set)) {
 		my($k,$v) = split(/\s*=\s*/, $param, 2);
-		$v =~ s/\s+$//;
-		#print "$k => $v\n";
+		if (defined $v) {
+		    $v =~ s/\s+$//;
+		    #print "$k => $v\n";
+		}
+		else {
+		    $k =~ s/\s+$//;
+		    #print "$k => undef";
+		}
 		my $lc = lc($k);
 		if ($lc eq "expires") {
 		    my $etime = str2time($v);
@@ -744,7 +757,7 @@ __END__
 
 =head1 SEE ALSO
 
-L<HTTP::Cookies::Netscape>
+L<HTTP::Cookies::Netscape>, L<HTTP::Cookies::Microsoft>
 
 =head1 COPYRIGHT
 

@@ -19,14 +19,15 @@ $url = new URI::URL("http://$netloc$script");
 my $form = 'searchtype=Substring';
 
 my $request = new HTTP::Request('POST', $url, undef, $form);
+$request->header('Content-Type', 'application/x-www-form-urlencoded');
 
 my $response = $ua->request($request, undef, undef);
 
-my $str = $response->asString;
+my $str = $response->as_string;
 
 print "$str\n";
 
-if ($response->isSuccess and $str =~ /^REQUEST_METHOD=POST$/m) {
+if ($response->is_success and $str =~ /^REQUEST_METHOD=POST$/m) {
     print "ok 1\n";
 } else {
     print "not ok 1\n";

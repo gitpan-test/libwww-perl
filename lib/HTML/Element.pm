@@ -1,6 +1,6 @@
 package HTML::Element;
 
-# $Id: Element.pm,v 1.19 1995/11/06 09:50:48 aas Exp $
+# $Id: Element.pm,v 1.29 1996/05/09 09:22:45 aas Exp $
 
 =head1 NAME
 
@@ -10,16 +10,16 @@ HTML::Element - Class for objects that represent HTML elements
 
  require HTML::Element;
  $a = new HTML::Element 'a', href => 'http://www.oslonett.no/';
- $a->pushContent("Oslonett AS");
+ $a->push_content("Oslonett AS");
 
  $tag = $a->tag;
  $tag = $a->starttag;
  $tag = $a->endtag;
  $ref = $a->attr('href');
 
- $links = $a->extractLinks();
+ $links = $a->extract_links();
 
- print $a->asHTML;
+ print $a->as_HTML;
 
 =head1 DESCRIPTION
 
@@ -31,44 +31,36 @@ for a HTML document.
 
 The following methods are available:
 
-=over 4
-
 =cut
 
 
 use Carp;
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.29 $ =~ /(\d+)\.(\d+)/);
 sub Version { $VERSION; }
 
-%OVERLOAD =
-(
-   '""'     => 'asHTML',
-   fallback => 0
-);
-
 # Elements that does not have corresponding end tags
-for (qw(base link meta isindex nextid
-	img br hr wbr
-	input
-       )
-    ) {
-    $noEndTag{$_} = 1;
-}
+%noEndTag = map { $_ => 1 } qw(base link meta isindex nextid
+			       img br hr wbr
+			       input
+			      );
+%optionalEndTag = map { $_ => 1 } qw(p li dt dd option);
 
 # Link elements an the name of the link attribute
 %linkElements =
 (
- 'base' => 'href',
- 'a'    => 'href',
- 'img'  => 'src',
- 'from' => 'action',
- 'link' => 'href',
+ body   => 'background',
+ base   => 'href',
+ a      => 'href',
+ img    => 'src',
+ form   => 'action',
+ 'link' => 'href',   # need quotes since link is a perl builtin
+ frame  => 'src',
 );
 
 
 
-=item new HTML::Element 'tag', 'attrname' => 'value',...
+=head2 $h = new HTML::Element 'tag', 'attrname' => 'value',...
 
 The object constructor.  Takes an tag name as argument. Optionally
 allows you to specify initial attributes at object creation time.
@@ -95,20 +87,25 @@ sub new
 
 
 
-=item ->tag()
+=head2 $h->tag()
 
-Returns the tag name for the element.
+Returns (optionally sets) the tag name for the element.
 
 =cut
 
 sub tag
 {
-    shift->{_tag};
+    my $self = shift;
+    if (@_) {
+	$self->{_tag} = $_[0];
+    } else {
+	$self->{_tag};
+    }
 }
 
 
 
-=item ->starttag()
+=head2 $h->starttag()
 
 Returns the complete start tag for the element.  Including <> and attributes.
 
@@ -121,10 +118,11 @@ sub starttag
     for (sort keys %$self) {
 	next if /^_/;
 	my $val = $self->{$_};
-	if ($_ eq $val) {
+	if ($_ eq $val) {   # not always good enough (perhaps a very special
+                            # value is better)
 	    $tag .= " \U$_";
 	} else {
-	    $val =~ s/([\">])/"&#" . ord($1) . ";"/eg;
+	    $val =~ s/([&\">])/"&#" . ord($1) . ";"/eg;
 	    $val = qq{"$val"} unless $val =~ /^\d+$/;
 	    $tag .= qq{ \U$_\E=$val};
 	}
@@ -134,7 +132,7 @@ sub starttag
 
 
 
-=item ->endtag()
+=head2 $h->endtag()
 
 Returns the complete end tag.
 
@@ -147,7 +145,7 @@ sub endtag
 
 
 
-=item ->parent([$newparent])
+=head2 $h->parent([$newparent])
 
 Returns (optionally sets) the parent for this element.
 
@@ -165,7 +163,7 @@ sub parent
 
 
 
-=item ->implicit([$bool])
+=head2 $h->implicit([$bool])
 
 Returns (optionally sets) the implicit attribute.  This attribute is
 used to indicate that the element was not originally present in the
@@ -180,13 +178,13 @@ sub implicit
 
 
 
-=item ->isInside('tag',...)
+=head2 $h->is_inside('tag',...)
 
 Returns true if this tag is contained inside one of the specified tags.
 
 =cut
 
-sub isInside
+sub is_inside
 {
     my $self = shift;
     my $p = $self;
@@ -202,9 +200,11 @@ sub isInside
 
 
 
-=item ->pos()
+=head2 $h->pos()
 
-Returns (and optionally sets) the current position.
+Returns (and optionally sets) the current position.  The position is a
+reference to a HTML::Element object that is part of the tree that has
+the current object as root.
 
 =cut
 
@@ -221,7 +221,7 @@ sub pos
 
 
 
-=item ->attr('attr', [$value])
+=head2 $h->attr('attr', [$value])
 
 Returns (and optionally sets) the value of some attribute.
 
@@ -240,7 +240,7 @@ sub attr
 
 
 
-=item ->content()
+=head2 $h->content()
 
 Returns the content of this element.  The content is represented as a
 array of text segments and references to other HTML::Element objects.
@@ -254,13 +254,13 @@ sub content
 
 
 
-=item ->isEmpty()
+=head2 $h->is_empty()
 
 Returns true if there is no content.
 
 =cut
 
-sub isEmpty
+sub is_empty
 {
     my $self = shift;
     !exists($self->{'_content'}) || !@{$self->{'_content'}};
@@ -268,13 +268,13 @@ sub isEmpty
 
 
 
-=item ->insertElement($element, $implicit)
+=head2 $h->insert_element($element, $implicit)
 
 Inserts a new element at current position and sets the pos.
 
 =cut
 
-sub insertElement
+sub insert_element
 {
     my($self, $tag, $implicit) = @_;
     my $e;
@@ -288,7 +288,7 @@ sub insertElement
     my $pos = $self->{_pos};
     $pos = $self unless defined $pos;
     $e->{_parent} = $pos;
-    $pos->pushContent($e);
+    $pos->push_content($e);
     unless ($noEndTag{$tag}) {
 	$self->{_pos} = $e;
 	$pos = $e;
@@ -297,14 +297,14 @@ sub insertElement
 }
 
 
-=item ->pushContent($element)
+=head2 $h->push_content($element)
 
 Adds to the content of the element.  The content should be a text
 segment (scalar) or a reference to a HTML::Element object.
 
 =cut
 
-sub pushContent
+sub push_content
 {
     my $self = shift;
     $self->{'_content'} = [] unless exists $self->{'_content'};
@@ -324,13 +324,13 @@ sub pushContent
 
 
 
-=item ->deleteContent()
+=head2 $h->delete_content()
 
 Clears the content.
 
 =cut
 
-sub deleteContent
+sub delete_content
 {
     my $self = shift;
     for (@{$self->{'_content'}}) {
@@ -342,7 +342,7 @@ sub deleteContent
 
 
 
-=item ->delete()
+=head2 $h->delete()
 
 Frees memory assosiated with the element an all children.  This is
 needed because perl's reference counting does not work since we use
@@ -353,7 +353,7 @@ circular references.
 
 sub delete
 {
-    $_[0]->deleteContent;
+    $_[0]->delete_content;
     delete $_[0]->{_parent};
     delete $_[0]->{_pos};
     $_[0] = undef;
@@ -361,7 +361,7 @@ sub delete
 
 
 
-=item ->traverse(\&callback, [$ignoretext])
+=head2 $h->traverse(\&callback, [$ignoretext])
 
 Traverse the element and all its children.  For each node visited, the
 callback routine is called with the node, a startflag and the depth as
@@ -394,7 +394,7 @@ sub traverse
 
 
 
-=item ->extractLinks([@wantedTypes])
+=head2 $h->extract_links([@wantedTypes])
 
 Returns links found by traversing the element and all its children.
 The return value is a reference to an array.  Each element of the
@@ -405,14 +405,14 @@ You might specify that you just want to extract some types of links.
 For instance if you only want to extract <a href="..."> and <img
 src="..."> links you might code it like this:
 
-  for (@{ $e->extractLinks(qw(a img)) }) {
+  for (@{ $e->extract_links(qw(a img)) }) {
       ($link, $linkelem) = @$_;
       ...
   }
 
 =cut
 
-sub extractLinks
+sub extract_links
 {
     my $self = shift;
     my %wantType; @wantType{map { lc $_ } @_} = (1) x @_;
@@ -436,10 +436,11 @@ sub extractLinks
 
 
 
-=item ->dump()
+=head2 $h->dump()
 
 Prints the element and all its children to STDOUT.  Mainly useful for
-debugging.
+debugging.  The structure of the document is shown by indentation (no
+end tags).
 
 =cut
 
@@ -461,56 +462,35 @@ sub dump
 
 
 
-=item ->asHTML()
+=head2 $h->as_HTML()
 
 Returns a string (the HTML document) that represents the element and
 its children.
 
 =cut
 
-sub asHTML
+sub as_HTML
 {
     my $self = shift;
-    my $depth = shift || 0;
-    my $tag = $self->tag;
-    my $pre = $self->isInside('pre');
-    my $html = '';
-    $html .= "  " x $depth unless $pre;
-    $html .= $self->starttag;
-
-    my $pos = 0;
-
-    for (@{$self->{_content}}) {
-	if (ref $_) {
-	    $html .= "\n" unless $pre;
-	    $html .= $_->asHTML($depth+1);
-	} else {
-	    if ($pre) {
-		$html .= "$_";
+    my @html = ();
+    $self->traverse(
+        sub {
+	    my($node, $start, $depth) = @_;
+	    if (ref $node) {
+		my $tag = $node->tag;
+		if ($start) {
+		    push(@html, $node->starttag);
+		} elsif (not ($noEndTag{$tag} or $optionalEndTag{$tag})) {
+		    push(@html, $node->endtag);
+		}
 	    } else {
-		if ($pos + length $_ < 60) {
-		    $html .= $_;
-		    $pos += length $_;
-		    next;
-		}
-		my $copy = $_;
-		while ($copy =~ s/^(.{60,}?)\s//) {
-		    $html .= "\n" . ("  " x ($depth+1)) . $1;
-		}
-		$html .= "\n" . ("  " x ($depth+1)) . $copy;
-		$pos = length $copy;
+		# simple text content
+		HTML::Entities::encode_entities($node, "<>&");
+		push(@html, $node);
 	    }
-	}
-    }
-    unless ($noEndTag{$tag} || $tag eq 'p' || $tag eq 'li' || $tag eq 'dt') {
-	unless ($pre) {
-	    $html .= "\n";
-	    $html .= "  " x $depth;
-	}
-	$html .= $self->endtag;
-    }
-    $html .= "\n" if $depth == 0;
-    $html;
+        }
+    );
+    join('', @html, "\n");
 }
 
 sub format
@@ -528,17 +508,16 @@ sub format
 
 __END__
 
-=back
 
 =head1 COPYRIGHT
 
-Copyright (c) 1995 Gisle Aas. All rights reserved.
+Copyright 1995,1996 Gisle Aas.  All rights reserved.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 =head1 AUTHOR
 
-Gisle Aas <aas@oslonett.no>
+Gisle Aas <aas@sn.no>
 
 =cut

@@ -1,42 +1,54 @@
 package URI::URL::gopher;
+require URI::URL::_generic;
 @ISA = qw(URI::URL::_generic);
+
+use URI::Escape qw(uri_unescape);
 
 sub default_port { 70 }
 
 sub _parse {
-    my($self, $url)   = @_;
-    $self->{'scheme'} = lc($1) if $url =~ s/^\s*([\w\+\.\-]+)://;
-    $self->netloc($self->unescape($1)) if $url =~ s!^//([^/]*)!!;
-    $self->{'frag'} = ($self->unescape($1)) if $url =~ s/#(.*)//;
-    $self->path($self->unescape($url));
+    my($self, $init)   = @_;
+    $self->URI::URL::_generic::_parse($init, qw(netloc path));
+    $self->_parse_gopherpath;
 }
 
 sub path {
-    my($self, @val) = @_;
-    my $old = $self->URI::URL::_generic::path;
-    return $old unless @val;
+    my $self = shift;
+    my $old = $self->URI::URL::_generic::path(@_);
+    return $old unless @_;
+    $self->_parse_gopherpath;
+    $old;
+}
 
-    my $val = $val[0];
-    $self->{'path'} = $val;
+sub epath {
+    my $self = shift;
+    my $old = $self->URI::URL::_generic::epath(@_);
+    return $old unless @_;
+    $self->_parse_gopherpath;
+    $old;
+}
 
-    if ($val =~ s!^/(.)!!) {
-        $self->{'gtype'} = $1;
+sub _parse_gopherpath {
+    my $self = shift;
+    my $p = uri_unescape($self->{'path'});
+
+    if (defined($p) && $p ne '/' && $p =~ s!^/?(.)!!) {
+	$self->{'gtype'} = $1;
     } else {
-        $self->{'gtype'} = "1";
-        $val = "";
+	$self->{'gtype'} = "1";
+	$p = "";
     }
 
     delete $self->{'selector'};
     delete $self->{'search'};
     delete $self->{'string'};
 
-    my @parts = split(/\t/, $val, 3);
+    my @parts = split(/\t/, $p, 3);
     $self->{'selector'} = shift @parts if @parts;
     $self->{'search'}   = shift @parts if @parts;
     $self->{'string'}   = shift @parts if @parts;
-
-    $old;
 }
+
 
 sub gtype    { shift->_path_elem('gtype',    @_); }
 sub selector { shift->_path_elem('selector', @_); }
@@ -50,15 +62,17 @@ sub _path_elem {
 
     # construct new path based on elements
     my $path = "/$self->{'gtype'}";
-    $path .= "\t$self->{'selector'}" if defined $self->{'selector'};
-    $path .= "\t$self->{'search'}"   if defined $self->{'search'};
-    $path .= "\t$self->{'string'}"   if defined $self->{'string'};
+    $path .= "$self->{'selector'}" if defined $self->{'selector'};
+    $path .= "\t$self->{'search'}" if defined $self->{'search'};
+    $path .= "\t$self->{'string'}" if defined $self->{'string'};
     $self->{'path'} = $path;
 
     $old;
 }
 
-require Carp;
-sub query { Carp::croak("Illegal method for gopher URLs") }
+*params  = \&URI::URL::bad_method;
+*qparams = \&URI::URL::bad_method;
+*query   = \&URI::URL::bad_method;
+*equery  = \&URI::URL::bad_method;
 
 1;

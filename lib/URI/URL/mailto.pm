@@ -1,37 +1,54 @@
 package URI::URL::mailto;
-@ISA = qw(URI::URL::_generic);
+require URI::URL;
+@ISA = qw(URI::URL);
 
-sub _parse {
-    my($self, $init) = @_;
-    $self->{'scheme'}  = lc($1) if ($init =~ s/^\s*([\w\+\.\-]+)://);
-    $self->{'encoded822addr'} = $self->unescape($init);
+use URI::Escape;
+
+sub new {
+    my($class, $init, $base) = @_;
+
+    my $self = bless { }, $class;
+    $self->{'scheme'} = lc($1) if $init =~ s/^\s*([\w\+\.\-]+)://;
+    $self->{'address'} = uri_unescape($init);
+    $self->base($base) if $base;
+    $self;
 }
 
-sub encoded822addr { shift->_elem('encoded822addr', @_); }
+sub address { shift->_elem('address', @_); }
+
+# can use these as aliases
+*encoded822addr = \&address;   # URI::URL v3 compatibility
+*netloc         = \&address;
+
+sub user {
+    my $self = shift;
+    $old = $self->{'address'};
+    if (@_) {
+	my $new = $old;
+	$new =~ s/.*\@?/$_[0]\@/;
+	$self->{'address'} = $new;
+    }
+    $old =~ s/\@.*//;
+    $old;
+}
+
+sub host {
+    my $self = shift;
+    $old = $self->{'address'};
+    if (@_) {
+	my $new = $old;
+	$new =~ s/\@.*/\@$_[0]/;
+	$self->{'address'} = $new;
+    }
+    $old =~ s/.*\@//;
+    $old;
+}
 
 sub as_string {
     my $self = shift;
-    my $str = '';
-    $str .= "$self->{'scheme'}:" if defined $self->{'scheme'};
-    $str .= "$self->{'encoded822addr'}" if defined $self->{'encoded822addr'};
+    my $str = ($self->{'scheme'} || "mailto") . ":";
+    $str .= uri_escape($self->{'address'}) if defined $self->{'address'};
     $str;
 }
-
-sub netloc { shift->encoded822addr(@_)};
-
-# Standard methods are not legal for mailto URLs
-require Carp;
-sub illegal { Carp::croak("Illegal attribute for mailto URLs"); }
-
-*path      = \&illegal;
-*query     = \&illegal;
-*params    = \&illegal;
-*frag      = \&illegal;
-
-*user      = \&illegal; # should we allow this one?
-*password  = \&illegal;
-*host      = \&illegal; # and this one?
-*port      = \&illegal;
-*full_path = \&illegal;
 
 1;

@@ -1,6 +1,6 @@
 package HTML::FormatText;
 
-# $Id: FormatText.pm,v 1.9 1995/09/26 11:10:11 aas Exp $
+# $Id: FormatText.pm,v 1.11 1996/04/09 15:44:12 aas Exp $
 
 =head1 NAME
 
@@ -113,7 +113,7 @@ sub out
 
     if (defined $self->{vspace}) {
 	if ($self->{out}) {
-	    $self->nl while $self->{vspace}-- > 0;
+	    $self->nl while $self->{vspace}-- >= 0;
 	    $self->goto_lm;
 	} else {
 	    $self->goto_lm;
@@ -126,7 +126,7 @@ sub out
 	$self->nl;
 	$self->goto_lm;
     }
-    
+
     if ($self->{pending_space}) {
 	$self->{pending_space} = 0;
 	$self->collect(' ');

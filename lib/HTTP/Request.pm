@@ -1,5 +1,5 @@
 #
-# $Id: Request.pm,v 1.11 1995/10/16 15:27:53 aas Exp $
+# $Id: Request.pm,v 1.16 1996/04/09 15:44:20 aas Exp $
 
 package HTTP::Request;
 
@@ -23,15 +23,15 @@ Instances of this class are usually passed to the C<request()> method
 of an C<LWP::UserAgent> object:
 
  $ua = new LWP::UserAgent;
- $request = new HTTP::Request('http://www.oslonett.no/');  
+ $request = new HTTP::Request 'http://www.oslonett.no/';
  $response = $ua->request($request);
 
 =head1 METHODS
 
 C<HTTP::Request> is a subclass of C<HTTP::Message> and therefore
-inherits its methods.  The inherited methods are C<header>,
-C<pushHeader>, C<removeHeader> C<headerAsString> and C<content>.  See
-L<HTTP::Message> for details.
+inherits its methods.  The inherited methods are header(),
+push_header(), remove_header(), headers_as_string() and content().
+See L<HTTP::Message> for details.
 
 =cut
 
@@ -39,7 +39,7 @@ require HTTP::Message;
 @ISA = qw(HTTP::Message);
 require URI::URL;
 
-=head2 new($method, $url, [$header, [$content]])
+=head2 $r = new HTTP::Request $method, $url, [$header, [$content]]
 
 Constructs a new C<HTTP::Request> object describing a request on the
 object C<$url> using method C<$method>.  The C<$url> argument can be
@@ -70,9 +70,9 @@ sub clone
 }
 
 
-=head2 method([$val])
+=head2 $r->method([$val])
 
-=head2 url([$val])
+=head2 $r->url([$val])
 
 These methods provide public access to the member variables containing
 respectively the method of the request and the URL object of the
@@ -92,36 +92,41 @@ sub method  { shift->_elem('_method', @_); }
 
 sub url
 {
-    my($self, $url) = @_;
-    if (defined $url) {
-        if (ref $url) {
-            $url = $url->abs;
-        } else {
-            $url = new URI::URL $url;
-        }
+    my $self = shift;
+    my($url) = @_;
+    if (@_) {
+	if (!defined $url) {
+	    # that's ok
+	} elsif (ref $url) {
+	    $url = $url->abs;
+	} else {
+	    eval {  $url = URI::URL->new($url); };
+	    $url = undef if $@;
+	}
     }
     $self->_elem('_url', $url);
 }
 
+*uri = \&url;  # this is the same for now
 
-=head2 asString()
+=head2 $r->as_string()
 
 Method returning a textual representation of the request.
 Mainly useful for debugging purposes. It takes no arguments.
 
 =cut
 
-sub asString
+sub as_string
 {
     my $self = shift;
     my @result = ("--- $self ---");
     my $url = $self->url;
     $url = (defined $url) ? $url->as_string : "[NO URL]";
     push(@result, $self->method . " $url");
-    push(@result, $self->headerAsString);
+    push(@result, $self->headers_as_string);
     my $content = $self->content;
     if ($content) {
-        push(@result, $self->content);
+	push(@result, $self->content);
     }
     push(@result, ("-" x 35));
     join("\n", @result, "");

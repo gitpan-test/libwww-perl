@@ -1,21 +1,20 @@
 package URI::URL::nntp;
+require URI::URL::_generic;
 @ISA = qw(URI::URL::_generic);
+
+use URI::Escape;
 
 sub default_port { 119 }
 
 sub _parse {
     my($self, $init) = @_;
-    $self->URI::URL::_generic::_parse($init);
+    $self->URI::URL::_generic::_parse($init, qw(netloc path frag));
 
-    my $path = $self->{'path'};
-    $path .= "?$self->{'query'}" if defined $self->{'query'};
-    delete $self->{'path'};
-    delete $self->{'query'};
+    my @parts = $self->path_components;
+    shift @parts if @parts && $parts[0] eq '';
 
-    my @parts = split(/\//, $path, 3);
-
-    $self->{'group'} = $self->unescape($parts[1]);
-    $self->{'digits'}= $self->unescape($parts[2]);
+    $self->{'group'} = uri_unescape($parts[0]);
+    $self->{'digits'}= uri_unescape($parts[1]);
 }
 
 sub group   { shift->_elem('group',  @_); }
@@ -26,20 +25,20 @@ sub as_string {
     my $self = shift;
     my $str = "$self->{'scheme'}:";
     $str .= "//$self->{'netloc'}" if defined $self->{'netloc'};
-    $str .= "/" . $self->escape($self->{'group'}) . "/" .
-      $self->escape($self->{'digits'});
+    $str .= "/" . uri_escape($self->{'group'}) . "/" .
+		  uri_escape($self->{'digits'});
     $str;
 }
 
 # Standard methods are not legal for nntp URLs
-require Carp;
-sub illegal { Carp::croak("Illegal attribute for nntp URLs"); }
-
-*path      = \&illegal;
-*query     = \&illegal;
-*params    = \&illegal;
-*frag      = \&illegal;
-*user      = \&illegal;
-*password  = \&illegal;
+*path      = \&URI::URL::bad_method;
+*epath     = \&URI::URL::bad_method;
+*query     = \&URI::URL::bad_method;
+*equery    = \&URI::URL::bad_method;
+*params    = \&URI::URL::bad_method;
+*eparams   = \&URI::URL::bad_method;
+*frag      = \&URI::URL::bad_method;
+*user      = \&URI::URL::bad_method;
+*password  = \&URI::URL::bad_method;
 
 1;

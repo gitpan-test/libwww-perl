@@ -1,81 +1,55 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Debug.pm,v 1.5 1995/07/14 00:15:03 aas Exp $
+# $Id: Debug.pm,v 1.11 1996/04/09 15:44:25 aas Exp $
 #
 package LWP::Debug;
 
 =head1 NAME
 
-LWP::Debug - debug routines
+LWP::Debug - debug routines for the libwww-perl library
 
 =head1 SYNOPSIS
 
- use LWP::Debug;
+ use LWP::Debug qw(+ -conns);
 
- level('+');
- level('-conns');
+ # Used internally in the library
+ LWP::Debug::trace('send()');
+ LWP::Debug::debug('url ok');
+ LWP::Debug::conns("read $n bytes: $data");
 
- trace('send()');
- debug('url ok');
- conns("read $n bytes: $data");
-
- debugl("Resolving hostname '$host'");
-
- $SIG{'ALRM'} = 't';
- alarm(1);
- sub t {
-     my $long = $LWP::Debug::longMsg();
-     my $msg = 'Timeout';
-     $msg .= ": $long" if defined $long;
-     die $msg;
- }
-    
 =head1 DESCRIPTION
 
-LWP::Debug provides tracing facilities. The C<trace>,
-C<debug> and C<conns> function log information at 
-increasing levels of detail. Which level of detail is
-actually printed is controlled with the C<level()>
-function.
-
-=head1 SEE ALSO
-
-See L<LWP> for a complete overview of libwww-perl5.
-
-=cut
-
-#####################################################################
-
-
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(level trace conns debug debugl);
-
-# debuglevel may have been set before use/require
-# can be set any combination of the bitmasks below
-
-my $debuglevel = 0;
-
-my $bit_trace  = 1;      # function calls
-my $bit_conns  = 2;      # connection
-my $bit_debug  = 4;      # debug messages
-
-%levels = (
-           'trace' => $bit_trace,
-           'conns' => $bit_conns,
-           'debug' => $bit_debug,
-           );
-
-# timeout message, stored by _longMsg()
-$timeoutMessage = undef;
-
-#####################################################################
+LWP::Debug provides tracing facilities. The trace(), debug() and
+conns() function are called within the library and they log
+information at increasing levels of detail. Which level of detail is
+actually printed is controlled with the C<level()> function.
 
 =head1 FUNCTIONS
 
+=head2 level(...)
+
+The C<level()> function controls the level of detail being
+logged. Passing '+' or '-' indicates full and no logging
+respectively. Inidividual levels can switched on and of by passing the
+name of the level with a '+' or '-' prepended.  The levels are:
+
+  trace   : trace function calls
+  debug   : print debug messages
+  conns   : show all data transfered over the connections
+
+The LWP::Debug module provide a special import() method that allows
+you to pass the level() arguments with initial use statement.  If a
+use argument start with '+' or '-' then it is passed to the level
+function, else the name is exported as usual.  The following two
+statements are thus equivalent (if you ignore that the second pollutes
+your namespace):
+
+  use LWP::Debug qw(+);
+  use LWP::Debug qw(level); level('+');
+
 =head2 trace($msg)
 
-The C<trace()> function is used for tracing function 
+The C<trace()> function is used for tracing function
 calls. The package and calling subroutine name is
 printed along with the passed argument. This should
 be called at the start of every major function.
@@ -91,102 +65,61 @@ The C<conns()> function is used to show data being
 transferred over the connections. This may generate
 considerable output.
 
-=head2 debugl($msg)
-
-The C<debugl> function is meant for operations which
-take long time; The message is processed by C<debug()>,
-and stored for later use by for example an SIGALRM
-signal handler. 
-
 =cut
 
-sub trace  { _log($bit_trace, @_); }
-sub conns  { _log($bit_conns, @_); }
-sub debug  { _log($bit_debug, @_); }
-sub debugl { _log($bit_debug, @_);
-             _longMsg(@_);
-           }
+require Exporter;
+@ISA = qw(Exporter);
+@EXPORT_OK = qw(level trace debug conns);
 
-=head2 level(...)
+use Carp ();
 
-The C<level()> function controls the level of
-detail being logged. Passing '+' or '-' indicates
-full and no logging respectively. Inidividual 
-levels can switched on and of by passing the name
-of the level with a '+' or '-' prepended.
+my @levels = qw(trace debug conns);
+%current_level = ();
 
-=cut
+sub import
+{
+    my $pack = shift;
+    my $callpkg = caller(0);
+    my @symbols = ();
+    my @levels = ();
+    for (@_) {
+	if (/^[-+]/) {
+	    push(@levels, $_);
+	} else {
+	    push(@symbols, $_);
+	}
+    }
+    Exporter::export($pack, $callpkg, @symbols);
+    level(@levels);
+}
 
 sub level
 {
-    my (@levels) = @_;
-    my $level; 
-    for $level (@levels) {
-        if ($level eq '+') {        # all on
-            # switch on all levels
-            my($k, $v);
-            while(($k, $v) = each %levels) {
-                $debuglevel |= $v;
-            }
-        }
-        elsif ($level eq '-') {     # all off
-            $debuglevel = 0;
-        }
-        elsif ($level =~ s/^\+//) {       # one on
-            $debuglevel |= $levels{$level};
-        }
-        elsif ($level =~ s/^\-//) {        # one off
-            $debuglevel &= ~ $levels{$level};
-        }
+    for (@_) {
+	if ($_ eq '+') {              # all on
+	    # switch on all levels
+	    %current_level = map { $_ => 1 } @levels;
+	} elsif ($_ eq '-') {           # all off
+	    %current_level = ();
+	} elsif (/^([-+])(\w+)$/) {
+	    $current_level{$2} = $1 eq '+';
+	} else {
+	    Carp::croak("Illegal level format $_");
+	}
     }
 }
 
-=head2 longMsg($msg)
+sub trace  { _log(@_) if $current_level{'trace'}; }
+sub debug  { _log(@_) if $current_level{'debug'}; }
+sub conns  { _log(@_) if $current_level{'conns'}; }
 
-Retrieve message set by debugl()
-
-=cut
-sub longMsg
-{
-    $LWP::Debug::timeoutMessage;
-}
-
-#####################################################################
-
-# Internal Functions
-
-# _log($trace, $msg)
-#
-# print message on STDERR if debuging is switched on
-#
 sub _log
 {
-    my($trace, $msg) = @_;
-
-    # make sure message have got one trailing newline
-
-    $msg =~ s/(?:\n)?$/\n/;
+    my $msg = shift;
+    $msg .= "\n" unless $msg =~ /\n$/;  # ensure trailing "\n"
 
     my($package,$filename,$line,$sub) = caller(2);
-
-    if ($trace & $debuglevel) {
-        print STDERR "$sub: $msg";
-    }
+    print STDERR "$sub: $msg";
 }
-
-# _longMsg($msg)
-#
-# Store message in a variable for later reference.
-# This is intended for long operations
-# which are likely to be timed out.
-#
-sub _longMsg
-{
-    my $msg = shift;
-
-    $LWP::Debug::timeoutMessage = $msg;
-}
-
-#####################################################################
 
 1;

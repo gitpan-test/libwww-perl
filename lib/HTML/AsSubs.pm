@@ -1,5 +1,9 @@
 package HTML::AsSubs;
 
+=head1 NAME
+
+HTML::AsSubs - functions that construct a HTML syntax tree
+
 =head1 SYNOPSIS
 
  use HTML::AsSubs;
@@ -12,7 +16,16 @@ package HTML::AsSubs;
 	     "."
 	    ),
 	  );
- print $h;
+ print $h->as_HTML;
+
+=head1 DESCRIPTION
+
+This module export functions that can be used to construct various
+HTML elements. The functions are named after the tags of the
+correponding HTML element and are all written in lower case. If the
+first argument is a I<hash> then it will be used to initialize the
+attributes of this element. The remaining arguments are regarded as
+content.
 
 =head1 ACKNOWLEDGEMENT
 
@@ -76,7 +89,7 @@ sub _elem
     }
     my $elem = new HTML::Element $tag, @attributes;
     for (@_) {
-	$elem->pushContent($_);
+	$elem->push_content($_);
     }
     $elem;
 }

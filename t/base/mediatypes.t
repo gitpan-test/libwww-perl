@@ -23,26 +23,34 @@ $url2 = new URI::URL 'http:test';
 $notests = @tests;
 print "1..$notests\n";
 
+if (-f "$ENV{HOME}/.mime.types") {
+   warn "
+The MediaTypes test might fail because you have a private ~/.mime.types file
+If you get a failed test, try to move it away while testing.
+";
+}
+
+
 $testno = 1;
 for (@tests) {
     ($file, $expectedtype, @expectedEnc) = @$_;
-    $type1 = guessMediaType($file);
-    ($type, @enc) = guessMediaType($file);
+    $type1 = guess_media_type($file);
+    ($type, @enc) = guess_media_type($file);
     if ($type1 ne $type) {
-       print "guessMediaType does not return same content-type in scalar and array conext.\n";
-	next;       
+       print "guess_media_type does not return same content-type in scalar and array conext.\n";
+	next;
     }
     $type = "undef" unless defined $type;
     if ($type eq $expectedtype and "@enc" eq "@expectedEnc") {
 	print "ok $testno\n";
     } else {
 	print "expected '$expectedtype' for '$file', got '$type'\n";
-        print "encoding: expected: '@expectedEnc', got '@enc'\n"
+	print "encoding: expected: '@expectedEnc', got '@enc'\n"
 	  if @expectedEnc || @enc;
 	print "nok ok $testno\n";
     }
     $testno++;
 }
 
-@imgSuffix = mediaSuffix('image/*');
+@imgSuffix = media_suffix('image/*');
 print "Image suffixes: @imgSuffix\n";

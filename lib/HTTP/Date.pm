@@ -1,4 +1,4 @@
-# $Id: Date.pm,v 1.10 1995/08/27 22:31:39 aas Exp $
+# $Id: Date.pm,v 1.16 1996/04/09 15:44:16 aas Exp $
 #
 package HTTP::Date;
 
@@ -15,20 +15,29 @@ time2str, str2time - date conversion routines
 
 =head1 DESCRIPTION
 
+This module provides two function that deals with the HTTP date format.
+
+=head2 time2str([$time])
+
 The time2str() function converts a machine time (seconds since epoch)
-to a string, and the str2time() function converts a string to machine
-time. 
+to a string.  If the function is called without an argument it will
+use the current time.
 
-The time2str() function returns a string in the format defined by the
-HTTP/1.0 specification.  This is a fixed length subset of the format
-defined by RFC 1123, represented in Universal Time (GMT), e.g:
+The string returned is in the format defined by the HTTP/1.0
+specification.  This is a fixed length subset of the format defined by
+RFC 1123, represented in Universal Time (GMT).  An example of this
+format is:
 
- Thu, 03 Feb 1994 00:00:00 GMT
+   Thu, 03 Feb 1994 17:09:00 GMT
 
-The str2time() function can parse the following formats:
+=head2 str2time($str [, $zone])
 
- "Wed, 09 Feb 1994 22:23:32 GMT"       -- proposed HTTP format
- "Thu Feb  3 17:03:55 GMT 1994"        -- ctime() format
+The str2time() function converts a string to machine time.  It returns
+undef if the format is unrecognized, or the year is not between 1970
+and 2038.  The function is able to parse the following formats:
+
+ "Wed, 09 Feb 1994 22:23:32 GMT"       -- HTTP format
+ "Thu Feb  3 17:03:55 GMT 1994"        -- ctime(3) format
  'Thu Feb  3 00:00:00 1994',           -- ANSI C asctime() format
  "Tuesday, 08-Feb-94 14:15:29 GMT"     -- old rfc850 HTTP format
  "Tuesday, 08-Feb-1994 14:15:29 GMT"   -- broken rfc850 HTTP format
@@ -38,126 +47,218 @@ The str2time() function can parse the following formats:
  "08-Feb-94 14:15:29 GMT"       -- rfc850 format (no weekday)
  "08-Feb-1994 14:15:29 GMT"     -- broken rfc850 format (no weekday)
 
+ "1994-02-03 14:15:29 -0100"    -- ISO 8601 format
+ "1994-02-03 14:15:29"          -- zone is optional
+ "1994-02-03"                   -- only date
+ "1994-02-03T14:15:29"          -- Use T as separator
+ "19940203T141529Z"             -- ISO 8601 compact format
+ "19940203"                     -- only date
+
  "08-Feb-94"     -- old rfc850 HTTP format    (no weekday, no time)
  "08-Feb-1994"   -- broken rfc850 HTTP format (no weekday, no time)
  "09 Feb 1994"   -- proposed new HTTP format  (no weekday, no time)
  "03/Feb/1994"   -- common logfile format     (no time, no offset)
 
-The str2time() function returns undef if the format is unrecognised,
-or the year is not between 1970 and 2038.
+ "Feb  3  1994"  -- Unix 'ls -l' format
+ "Feb  3 17:03"  -- Unix 'ls -l' format
+
+The parser ignores leading and trailing whitespace.  It also allow the
+seconds to be missing and that the month is numerical in most formats.
+
+The str2time() function takes an optional second argument that
+specifies the default time zone to use when converting the date.  This
+zone specification should be numerical (like "-0800" or "+0100") or
+"GMT".  This parameter is ignored if the zone is specified in the date
+string itself.  It this parameter is missing, and the date string
+format does not contain any zone specification then the local time
+zone is assumed.
+
+If the year is missing, then we assume that the date is the first
+matching date I<before> current time.
 
 =head1 BUGS
 
-C<str2time()> is far too lax; might get run-time warnings about
-string/number mismatches when we get non-standard date strings. It
-should use complete regular expressions for each format.
+Non-numerical time zones (like MET, PST) are all treated like GMT.
+Do not use them.
 
-C<str2time()> could be taught to recognise elements in general
-places, e.g. "1995 Wednesday, 7 July".
+The str2time() function has been told how to parse far too many
+formats.  This makes the module name misleading :-)
 
 =cut
 
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
 sub Version { $VERSION; }
 
-require 5.001;
+require 5.002;
 require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(time2str str2time);
 
-require Time::Local;
+use Time::Local ();
+
+use strict;
+use vars qw(@DoW @MoY %MoY);
 
 @DoW = qw(Sunday Monday Tuesday Wednesday Thursday Friday Saturday);
 @MoY = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
 # Build %MoY hash
 my $i = 0;
-foreach(@MoY) { $MoY{$_} = $i++; }
-undef($i);
+foreach(@MoY) {
+   $MoY{lc $_} = $i++;
+}
+
+my($current_month, $current_year) = (localtime)[4, 5];
 
 
-sub time2str
+
+
+sub time2str (;$)
 {
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday) = gmtime(shift || time);
-    sprintf("%s, %02d %s %04d %02d:%02d:%02d GMT",
-	    substr($DoW[$wday],0,3),
-	    $mday, $MoY[$mon], $year+1900,
-	    $hour, $min, $sec);
+   my $time = shift;
+   $time = time unless defined $time;
+   my ($sec, $min, $hour, $mday, $mon, $year, $wday) = gmtime($time);
+   sprintf("%s, %02d %s %04d %02d:%02d:%02d GMT",
+	   substr($DoW[$wday],0,3),
+	   $mday, $MoY[$mon], $year+1900,
+	   $hour, $min, $sec);
 }
 
 
-sub str2time
+
+
+sub str2time ($;$)
 {
-    my($date) = shift;
+   local($_) = shift;
+   return undef unless defined;
+   my($default_zone) = @_;
 
-    # Split date string
-    my(@w) = split(' ', $date);
+   # Remove useless weekday, if it exists
+   s/^\s*(?:sun|mon|tue|wed|thu|fri|sat)\w*,?\s*//i;
 
-    # Remove useless weekday, if it exists
-    if ($w[0] =~ /^\D/) { shift(@w); }
+   my($day, $mon, $yr, $hr, $min, $sec, $tz);
+   my $offset = 0;  # used when compensating for timezone
 
-    if (!$w[0]) { return undef; }
+ PARSEDATE: {
+      # Then we are able to check for most the other formats with this regexp
+      ($day,$mon,$yr,$hr,$min,$sec,$tz) =
+	/^\s*
+	 (\d\d?)               # day
+	    (?:\s+|[-\/])
+	 (\w+)                 # month
+	    (?:\s+|[-\/])
+	 (\d+)                 # year
+	 (?:
+	       (?:\s+|:)       # separator before clock
+	    (\d\d?):(\d\d)     # hour:min
+	    (?::(\d\d))?       # optional seconds
+	 )?                    # optional clock
+	    \s*
+	 ([-+]?\d{2,4}|GMT|gmt)? # timezone
+	    \s*$
+	/x
+	  and last PARSEDATE;
 
-    my($day, $mn, $yr, $hr, $min, $sec, $adate, $atime);
-    my($offset) = 0;
+      # Try the ctime and asctime format
+      ($mon, $day, $hr, $min, $sec, $tz, $yr) =
+	/^\s*                  # allow intial whitespace
+	 (\w{1,3})             # month
+	    \s+
+	 (\d\d?)               # day
+	    \s+
+	 (\d\d?):(\d\d)        # hour:min
+	 (?::(\d\d))?          # optional seconds
+	    \s+
+	 (?:(GMT|gmt)\s+)?     # optional GMT timezone
+	 (\d+)                 # year
+	    \s*$               # allow trailing whitespace
+	/x
+	  and last PARSEDATE;
 
-    # Check which format
-    if ($w[0] =~ /^\D/)   # Must be ctime (Feb  3 17:03:55 GMT 1994)
-    {
-        $mn    = shift(@w);
-        $day   = shift(@w);
-        $atime = shift(@w);
-        shift(@w) if @w > 1;
-        $yr    = shift(@w);
+      # Then the Unix 'ls -l' date format
+      ($mon, $day, $yr, $hr, $min) =
+	/^\s*
+	 (\w{3})               # month
+	    \s+
+	 (\d\d?)               # day
+	    \s+
+	 (?:
+	    (\d\d\d\d) |       # year
+	    (\d{1,2}):(\d{2})  # hour:min
+	 )
+	 \s*$
+       /x
+	 and last PARSEDATE;
+
+      # ISO 8601 format '1996-02-29 12:00:00 -0100' and variants
+      ($yr, $mon, $day, $hr, $min, $sec, $tz) =
+	/^\s*
+	  (\d{4})              # year
+	     [-\/]?
+	  (\d\d?)              # numerical month
+	     [-\/]?
+	  (\d\d?)              # day
+	 (?:
+	       (?:\s+|:|T|-)   # separator before clock
+	    (\d\d?):?(\d\d)    # hour:min
+	    (?::?(\d\d))?      # optional seconds
+	 )?                    # optional clock
+	    \s*
+	 ([-+]?\d\d?:?(:?\d\d)?
+	  |Z|z)?               # timezone  (Z is "zero meridian", i.e. GMT)
+	    \s*$
+	/x
+	  and last PARSEDATE;
+
+      # If it is not recognized by now we give up
+      return undef;
+   }
+
+   # Translate month name to number
+   if ($mon =~ /^\d+$/) {
+     # numeric month
+     return undef if $mon < 1 || $mon > 12;
+     $mon--;
+   } else {
+     $mon = lc $mon;
+     return undef unless exists $MoY{$mon};
+     $mon = $MoY{$mon};
+   }
+
+   # If the year is missing, we assume some date before the current,
+   # because these date are mostly present on "ls -l" listings.
+   unless (defined $yr) {
+	$yr = $current_year;
+	$yr-- if $mon > $current_month;
     }
-    elsif ($w[0] =~ m#/#) 
-    {   # Must be common logfile (03/Feb/1994:17:03:55 -0700)
-        ($adate, $atime) = split(/:/, $w[0], 2);
-        ($day, $mn, $yr) = split(/\//, $adate);
-        shift(@w);
-        if ( defined $w[0] and $w[0] =~ m#^([+-])(\d\d)(\d\d)$# )
-        {
-            $offset = (3600 * $2) + (60 * $3);
-            if ($1 eq '+') { $offset *= -1; }
-        }
-    }
-    elsif ($w[0] =~ /-/)  # Must be rfc850 (08-Feb-94 ...)
-    {
-        ($day, $mn, $yr) = split(/-/, $w[0]);
-        shift(@w);
-        $atime = $w[0];
-    }
-    else                  # Must be rfc822 (09 Feb 1994 ...)
-    {
-        $day   = shift(@w);
-        $mn    = shift(@w);
-        $yr    = shift(@w);
-        $atime = shift(@w);
-    }
-    if ($atime)
-    {
-        ($hr, $min, $sec) = split(/:/, $atime);
-    }
-    else
-    {
-        $hr = $min = $sec = 0;
-    }
 
-    if (!$mn || ($yr !~ /\d+/))     { return undef; }
-    if (($yr > 99) && ($yr < 1970)) { return undef; }
-    # Epoch started in 1970
+   # Then we check if the year is acceptable
+   return undef if $yr > 99 && $yr < 1970;  # Epoch started in 1970
+   # Epoch counter maxes out in year 2038, assuming "time_t" is 32 bit
+   return undef if $yr > 2038;
 
-    if ($yr < 70)    { $yr += 100;  }
-    if ($yr >= 1900) { $yr -= 1900; }
-    if ($yr >= 138)  { return undef; }
-    # Epoch counter maxes out in year 2038, assuming "time_t" is 32 bit
+   $yr += 100 if $yr < 70;
+   $yr -= 1900 if $yr >= 1900;
 
-    # Translate month name to number
-    my $mon = $MoY{$mn};
-    return undef unless defined $mon;
+   # Check the day
+   return undef if $day < 1 || $day > 31;
 
-    # Translate to seconds since Epoch
-    return (Time::Local::timegm($sec, $min, $hr, $day, $mon, $yr) + $offset);
+   # Make sure things are defined
+   for ($sec, $min, $hr) {  $_ = 0 unless defined   }
+
+   # Should we compensate for the timezone?
+   $tz = $default_zone unless defined $tz;
+   return Time::Local::timelocal($sec, $min, $hr, $day, $mon, $yr)
+     unless defined $tz;
+
+   # We can calculate offset for numerical time zones
+   if ($tz =~ /^([-+])?(\d\d?):?(\d\d)?$/) {
+       $offset = 3600 * $2;
+       $offset += 60 * $3 if $3;
+       $offset *= -1 if $1 ne '-';
+   }
+   Time::Local::timegm($sec, $min, $hr, $day, $mon, $yr) + $offset;
 }
 
 1;
+

@@ -1,36 +1,57 @@
 package URI::URL::news;
-@ISA = qw(URI::URL::_generic);
+require URI::URL;
+@ISA = qw(URI::URL);
 
-sub _parse {
-    my($self, $init) = @_;
-    $self->{'scheme'}  = lc($1) if ($init =~ s/^\s*([\w\+\.\-]+)://);
-    my $tmp = $self->unescape($init);
-    $self->{'grouppart'} = $tmp;
-    $self->{ ($tmp =~ m/\@/) ? 'article' : 'group' } = $tmp;
+use URI::Escape;
+
+sub new {
+    my($class, $init, $base) = @_;
+    my $self = bless { }, $class;
+    $self->{'scheme'}  = lc($1) if $init =~ s/^\s*([\w\+\.\-]+)://;
+    $self->groupart(uri_unescape($init));
+    $self->base($base) if $base;
+    $self;
 }
 
-sub grouppart { shift->_elem('grouppart', @_) }
-sub article   { shift->_elem('article',   @_) }
-sub group     { shift->_elem('group',     @_) }
+sub groupart {
+    my $self = shift;
+    my $old = $self->{'path'};
+    if (@_) {
+	my $p = shift;
+	if (defined $p && $p =~ /\@/) {
+	    # it is an message id
+	    $p =~ s/^<(.*)>$/$1/;  # "<" and ">" should not be part of it
+	}
+	$self->{'path'} = $p;
+    }
+    $old;
+}
+
+*path = \&groupart;
+
+sub article   {
+    my $self = shift;
+    Carp::croak("Illegal article id name (does not contain '\@')")
+      if @_ && $_[0] !~ /\@/;
+    my $old = $self->groupart(@_);
+    return undef if $old !~ /\@/;
+    $old;
+}
+
+
+sub group {
+    my $self = shift;
+    Carp::croak("Illegal group name (contains '\@')")
+      if @_ && $_[0] =~ /\@/;
+    my $old = $self->groupart(@_);
+    return undef if $old =~ /\@/;
+    $old;
+}
 
 sub as_string {
     my $self = shift;
-    "$self->{'scheme'}:" . $self->escape($self->{'grouppart'});
+    my $scheme = $self->{'scheme'} || "news";
+    "$scheme:" . uri_escape($self->{'path'});
 }
-
-# Standard methods are not legal for news URLs
-require Carp;
-sub illegal { Carp::croak("Illegal attribute for news URLs"); }
-
-*path      = \&illegal;
-*query     = \&illegal;
-*params    = \&illegal;
-*frag      = \&illegal;
-
-*user      = \&illegal;
-*password  = \&illegal;
-*host      = \&illegal;
-*port      = \&illegal;
-*full_path = \&illegal;
 
 1;

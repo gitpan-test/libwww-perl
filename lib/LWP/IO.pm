@@ -1,8 +1,16 @@
 package LWP::IO;
 
-# $Id: IO.pm,v 1.4 1995/11/05 11:16:03 aas Exp $
+# $Id: IO.pm,v 1.7 1996/04/09 15:44:26 aas Exp $
 
 require LWP::Debug;
+use AutoLoader;
+@ISA=qw(AutoLoader);
+
+sub read;
+sub write;
+
+1;
+__END__
 
 =head1 NAME
 
@@ -21,8 +29,6 @@ override these functions.  Just provide replacement functions before
 you require LWP. See also L<LWP::TkIO>.
 
 =cut
-
-my $read = <<'EOT';
 
 sub read
 {
@@ -44,14 +50,15 @@ sub read
 	die "Exception while reading on socket handle";
     } else {
 	my $n = sysread($fd, $_[0], $size, $offset);
-	LWP::Debug::conns("Read $n bytes: '$_[0]'") if defined $n;
+	# Since so much data might pass here we cheat about debugging
+	if ($LWP::Debug::current_level{'conns'}) {
+	    LWP::Debug::debug("Read $n bytes");
+	    LWP::Debug::conns($_[0]) if $n;
+	}
 	return $n;
     }
 }
-EOT
 
-
-my $write = <<'EOT';
 
 sub write
 {
@@ -74,19 +81,16 @@ sub write
 	} else {
 	    my $n = syswrite($fd, $_[0], $len-$offset, $offset);
 	    return $bytes_written unless defined $n;
-	    LWP::Debug::conns("Write $n bytes: '" .
-			      substr($_[0], $offset, $n) .
-			      "'");
+
+	    if ($LWP::Debug::current_level{'conns'}) {
+		LWP::Debug::conns("Write $n bytes: '" .
+				  substr($_[0], $offset, $n) .
+				  "'");
+	    }
 	    $offset += $n;
 	}
     }
     $offset;
 }
-
-EOT
-
-
-eval $read  unless defined &read;  die "LWP::IO::read $@" if $@;
-eval $write unless defined &write; die "LWP::IO::write $@" if $@;
 
 1;

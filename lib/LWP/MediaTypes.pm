@@ -1,13 +1,13 @@
 #
-# $Id: MediaTypes.pm,v 1.9 1995/08/29 10:13:19 aas Exp $
+# $Id: MediaTypes.pm,v 1.14 1996/05/08 16:28:55 aas Exp $
 
 package LWP::MediaTypes;
 
 =head1 NAME
 
-guessMediaType - guess media type for a file or an URL.
+guess_media_type - guess media type for a file or a URL.
 
-mediaSuffix - returns file extentions for a media type
+media_suffix - returns file extentions for a media type
 
 =head1 DESCRIPTION
 
@@ -24,7 +24,9 @@ For backwards compatability we will also look for F<~/.mime.types>.
 
 require Exporter;
 @ISA = qw(Exporter);
-@EXPORT = qw(guessMediaType mediaSuffix);
+@EXPORT = qw(guess_media_type media_suffix);
+
+require LWP::Debug;
 
 my %suffixType = (              # note: initialized from mime.types
     'txt'   => 'text/plain',
@@ -41,25 +43,25 @@ my %suffixEncoding = (
     'z'   => 'x-pack'
 );
 
+local($/, $_) = ("\n", undef);  # ensure correct $INPUT_RECORD_SEPARATOR
 
 # Try to locate "media.types" file, and initialize %suffixType from it
-for $typefile ("$ENV{HOME}/.media.types",
+for $typefile ((map {"$_/LWP/media.types"} @INC),
+	       "$ENV{HOME}/.media.types",
 	       "$ENV{HOME}/.mime.types",
-	       map {"$_/LWP/media.types"} @INC) {
-    if (open(TYPE, "$typefile")) {
-	%suffixType = ();  # forget default types
-	while (<TYPE>) {
-	    next if /^\s*#/; # comment line
-	    next if /^\s*$/; # blank line
-	    s/#.*//;         # remove end-of-line comments
-	    my($type, @exts) = split(' ', $_);
-	    for $ext (@exts) {
-		$suffixType{$ext} = $type;
-	    }
+	       ) {
+    open(TYPE, $typefile) || next;
+    LWP::Debug::debug("Reading media types from $typefile");
+    while (<TYPE>) {
+	next if /^\s*#/; # comment line
+	next if /^\s*$/; # blank line
+	s/#.*//;         # remove end-of-line comments
+	my($type, @exts) = split(' ', $_);
+	for $ext (@exts) {
+	    $suffixType{$ext} = $type;
 	}
-	close(TYPE);
-	last;
     }
+    close(TYPE);
 }
 
 
@@ -67,24 +69,24 @@ for $typefile ("$ENV{HOME}/.media.types",
 
 =head1 FUNCTIONS
 
-=head2 guessMediaType($filename)
+=head2 guess_media_type($filename)
 
 This function tries to guess media type and encoding for given file.
 In scalar context it returns only the content-type.  In array context
 it returns an array consisting of content-type followed by any
 content-encodings applied.
 
-The guessMediaType function also accepts an URI::URL object as argument.
+The guess_media_type function also accepts a URI::URL object as argument.
 
 If the type can not be deduced from looking at the file name only,
-then guessMediaType() will take a look at the actual file using the
+then guess_media_type() will take a look at the actual file using the
 C<-T> perl operator in order to determine if this is a text file
 (text/plain).  If this does not work it will return
 I<application/octet-stream> as the type.
 
 =cut
 
-sub guessMediaType
+sub guess_media_type
 {
     my($file) = @_;
     return undef unless defined $file;
@@ -140,16 +142,16 @@ sub guessMediaType
 }
 
 
-=head2 mediaSuffix($type)
+=head2 media_suffix($type)
 
-  mediaSuffix('image/*')
+  media_suffix('image/*')
 
 This function will return all suffixes that can be used to denote the
 specified media type.  Wildcard types can be used.
 
 =cut
 
-sub mediaSuffix {
+sub media_suffix {
     my(@type) = @_;
     my(@suffix,$nom,$val);
     foreach (@type) {

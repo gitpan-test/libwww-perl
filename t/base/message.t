@@ -1,9 +1,9 @@
 #!perl -w
 
 use strict;
-use Test qw(plan ok);
+use Test qw(plan ok skip);
 
-plan tests => 80;
+plan tests => 88;
 
 require HTTP::Message;
 
@@ -305,3 +305,31 @@ ok($m->content("bar"), "foo");
 ok($foo, "bar");
 ok($m->content, "bar");
 ok($m->content_ref, \$foo);
+
+$m = HTTP::Message->new;
+$m->content("fo=6F");
+ok($m->decoded_content, "fo=6F");
+$m->header("Content-Encoding", "quoted-printable");
+ok($m->decoded_content, "foo");
+
+$m = HTTP::Message->new;
+$m->header("Content-Encoding", "gzip, base64");
+$m->content_type("text/plain; charset=UTF-8");
+$m->content("H4sICFWAq0ECA3h4eAB7v3u/R6ZCSUZqUarCoxm7uAAZKHXiEAAAAA==\n");
+
+$@ = "";
+skip($] < 5.008 ? "No Encode module" : "",
+     sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A}\n");
+ok($@ || "", "");
+
+$m->header("Content-Encoding", "foobar");
+ok($m->decoded_content, undef);
+ok($@ =~ /^Don't know how to decode Content-Encoding 'foobar'/);
+
+my $err = 0;
+eval {
+    $m->decoded_content(raise_error => 1);
+    $err++;
+};
+ok($@ =~ /Don't know how to decode Content-Encoding 'foobar'/);
+ok($err, 0);

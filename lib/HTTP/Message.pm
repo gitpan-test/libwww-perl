@@ -1,10 +1,10 @@
 package HTTP::Message;
 
-# $Id: Message.pm,v 1.45 2004/11/12 12:54:04 gisle Exp $
+# $Id: Message.pm,v 1.52 2004/11/30 12:00:22 gisle Exp $
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.45 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.52 $ =~ /(\d+)\.(\d+)/);
 
 require HTTP::Headers;
 require Carp;
@@ -153,6 +153,80 @@ sub content_ref
     }
     $old = $$old if $old_cref;
     return $old;
+}
+
+
+sub decoded_content
+{
+    my($self, %opt) = @_;
+    my $content_ref;
+
+    eval {
+
+	require HTTP::Headers::Util;
+	my($ct, %ct_param);
+	if (my @ct = HTTP::Headers::Util::split_header_words($self->header("Content-Type"))) {
+	    ($ct, undef, %ct_param) = @{$ct[-1]};
+	    $ct = lc($ct);
+
+	    die "Can't decode multipart content" if $ct =~ m,^multipart/,;
+	}
+
+	$content_ref = $self->content_ref;
+	die "Can't decode ref content" if ref($content_ref) ne "SCALAR";
+
+	if (my $h = $self->header("Content-Encoding")) {
+	    $h =~ s/^\s+//;
+	    $h =~ s/\s+$//;
+	    for my $ce (reverse split(/\s*,\s*/, lc($h))) {
+		next unless $ce || $ce eq "identity";
+		if ($ce eq "gzip" || $ce eq "x-gzip") {
+		    require Compress::Zlib;
+		    $content_ref = \Compress::Zlib::memGunzip($$content_ref);
+		    die "Can't gunzip content" unless defined $$content_ref;
+		}
+		elsif ($ce eq "x-bzip2") {
+		    require Compress::Bzip2;
+		    $content_ref = Compress::Bzip2::decompress($$content_ref);
+		    die "Can't bunzip content" unless defined $$content_ref;
+		}
+		elsif ($ce eq "deflate") {
+		    require Compress::Zlib;
+		    $content_ref = \Compress::Zlib::uncompress($$content_ref);
+		    die "Can't inflate content" unless defined $$content_ref;
+		}
+		elsif ($ce eq "compress" || $ce eq "x-compress") {
+		    die "Can't uncompress content";
+		}
+		elsif ($ce eq "base64") {  # not really C-T-E, but should be harmless
+		    require MIME::Base64;
+		    $content_ref = \MIME::Base64::decode($$content_ref);
+		}
+		elsif ($ce eq "quoted-printable") { # not really C-T-E, but should be harmless
+		    require MIME::QuotedPrint;
+		    $content_ref = \MIME::QuotedPrint::decode($$content_ref);
+		}
+		else {
+		    die "Don't know how to decode Content-Encoding '$ce'";
+		}
+	    }
+	}
+
+	if ($ct && $ct =~ m,^text/,,) {
+	    my $charset = $opt{charset} || $ct_param{charset} || $opt{default_charset} || "ISO-8859-1";
+	    $charset = lc($charset);
+	    if ($charset ne "none") {
+		require Encode;
+		$content_ref = \Encode::decode($charset, $$content_ref, Encode::FB_CROAK());
+	    }
+	}
+    };
+    if ($@) {
+	Carp::croak($@) if $opt{raise_error};
+	return undef;
+    }
+
+    return $opt{ref} ? $content_ref : $$content_ref;
 }
 
 
@@ -419,9 +493,9 @@ but it will make your program a whole character shorter :-)
 
 =item $mess->content( $content )
 
-The content() method sets the content if an argument is given.  If no
+The content() method sets the raw content if an argument is given.  If no
 argument is given the content is not touched.  In either case the
-original content is returned.
+original raw content is returned.
 
 Note that the content should be a string of bytes.  Strings in perl
 can contain characters outside the range of a byte.  The C<Encode>
@@ -450,6 +524,40 @@ external source.  The content() and add_content() methods
 will automatically dereference scalar references passed this way.  For
 other references content() will return the reference itself and
 add_content() will refuse to do anything.
+
+=item $mess->decoded_content( %options )
+
+Returns the content with any C<Content-Encoding> undone and strings
+mapped to perl's Unicode strings.  If the C<Content-Encoding> or
+C<charset> of the message is unknown this method will croak.
+
+The following options can be specified.
+
+=over
+
+=item C<charset>
+
+This override the charset parameter for text content.  The value
+C<none> can used to suppress decoding of the charset.
+
+=item C<default_charset>
+
+This override the default charset of "ISO-8859-1".
+
+=item C<raise_error>
+
+If TRUE then raise an exception if not able to decode content.  Reason
+might be that the specified C<Content-Encoding> or C<charset> is not
+supported.  If this option is FALSE, then decode_content() will return
+C<undef> on errors, but will still set $@.
+
+=item C<ref>
+
+If TRUE then a reference to decoded content is returned.  This might
+be more efficient in cases where the decoded content is identical to
+the raw content as no data copying is required in this case.
+
+=back
 
 =item $mess->parts
 

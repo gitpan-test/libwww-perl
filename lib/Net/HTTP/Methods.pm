@@ -1,6 +1,6 @@
 package Net::HTTP::Methods;
 
-# $Id: Methods.pm,v 1.2 2001/11/17 02:32:00 gisle Exp $
+# $Id: Methods.pm,v 1.4 2001/11/20 20:46:11 gisle Exp $
 
 require 5.005;  # 4-arg substr
 
@@ -25,13 +25,14 @@ sub http_configure {
     my $host = delete $cnf->{Host};
     my $peer = $cnf->{PeerAddr} || $cnf->{PeerHost};
     if ($host) {
-	$cnf->{PeerHost} = $host unless $peer;
+	$cnf->{PeerAddr} = $host unless $peer;
     }
     else {
 	$host = $peer;
 	$host =~ s/:.*//;
     }
     $cnf->{PeerPort} = $self->http_default_port unless $cnf->{PeerPort};
+    $cnf->{Proto} = 'tcp';
 
     my $keep_alive = delete $cnf->{KeepAlive};
     my $http_version = delete $cnf->{HTTPVersion};
@@ -163,7 +164,7 @@ sub format_request {
 
 sub write_request {
     my $self = shift;
-    $self->syswrite($self->format_request(@_));
+    $self->print($self->format_request(@_));
 }
 
 sub format_chunk {
@@ -175,7 +176,7 @@ sub format_chunk {
 sub write_chunk {
     my $self = shift;
     return 1 unless defined($_[0]) && length($_[0]);
-    $self->syswrite(hex(length($_[0])) . $CRLF . $_[0] . $CRLF);
+    $self->print(hex(length($_[0])) . $CRLF . $_[0] . $CRLF);
 }
 
 sub format_chunk_eof {
@@ -189,7 +190,7 @@ sub format_chunk_eof {
 
 sub write_chunk_eof {
     my $self = shift;
-    $self->syswrite($self->format_chunk_eof(@_));
+    $self->print($self->format_chunk_eof(@_));
 }
 
 
@@ -337,7 +338,7 @@ sub read_entity_body {
 	    $bytes = 0;
 	}
 	elsif (my $te = ${*$self}{'http_te'}) {
-	    my @te = split(/\s*,\s*/, $te);
+	    my @te = split(/\s*,\s*/, lc($te));
 	    die "Chunked must be last Transfer-Encoding '$te'"
 		unless pop(@te) eq "chunked";
 

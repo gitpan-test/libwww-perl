@@ -1,5 +1,5 @@
 # This -*- perl -*- script writes the Makefile for libwww-perl
-# $Id: Makefile.PL,v 1.33 1996/05/26 11:01:13 aas Exp $
+# $Id: Makefile.PL,v 1.35 1996/07/17 09:36:41 aas Exp $
 
 #--- Configuration section ---
 
@@ -28,7 +28,7 @@ my $missing_modules = 0;
 print "Checking for Net::FTP...";
 eval {
     require Net::FTP;
-    Net::FTP->require_version('1.10');
+    Net::FTP->require_version('2.00');
 };
 if ($@) {
     print " failed\n";
@@ -38,7 +38,7 @@ $@
 The libwww-perl library normally use the Net::FTP module when
 accessing ftp servers.  You would have to install this package or
 configure your application to use a proxy server for making ftp
-requests work.
+requests work.  Net::FTP is part of the 'libnet' distribution.
 
 EOT
     sleep(2);  # Don't hurry too much
@@ -76,6 +76,7 @@ EOT
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
+   NAME          => 'libwww-perl',
    VERSION_FROM  => 'lib/LWP.pm',
    PL_FILES      => {
                       'bin/lwp-request.PL' => 'bin/lwp-request',

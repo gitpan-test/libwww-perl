@@ -1,4 +1,4 @@
-                                            $Date: 1996/05/26 10:43:02 $
+                                            $Date: 1996/07/23 19:57:10 $
 
 This is a list over things that we plan to implement in libwww-perl-5
 (or 6, or 7,...)  The order of items does not reflect priority.
@@ -6,7 +6,6 @@ This is a list over things that we plan to implement in libwww-perl-5
   o  Add more HTTP/1.1 features as they stabilize
        Transfer-Encoding: chunked
        Connection: Keep-Alive
-       Wait 5 sec before sending content in requests
        Content-Range
        Multipart mime types
        Use HTTP/1.1 in the request line when we support it all.

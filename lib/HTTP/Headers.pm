@@ -1,5 +1,5 @@
 #
-# $Id: Headers.pm,v 1.19 1996/05/26 10:38:55 aas Exp $
+# $Id: Headers.pm,v 1.24 1996/07/22 13:05:56 aas Exp $
 
 package HTTP::Headers;
 
@@ -14,12 +14,12 @@ HTTP::Headers - Class encapsulating HTTP Message headers
 
 =head1 DESCRIPTION
 
-The C<HTTP::Headers> class encapsulate HTTP style message headers.
-The headers consist of attribute value pairs which may be repeated,
+The C<HTTP::Headers> class encapsulates HTTP-style message headers.
+The headers consist of attribute-value pairs, which may be repeated,
 and which are printed in a particular order.
 
 Instances of this class are usually created as member variables of the
-C<HTTP::Request> and C<HTTP::Response> classes, internally to the
+C<HTTP::Request> and C<HTTP::Response> classes, internal to the
 library.
 
 =head1 METHODS
@@ -39,21 +39,25 @@ require Carp;
 #    - Request-Headers
 #    - Response-Headers
 #    - Entity-Headers
-# (From draft-ietf-http-v11-spec-00.ps, Nov 22, 1995)
+#    - Aditional Headers (§19.6.2)
+# (From draft-ietf-http-v11-spec-06, Jul 4, 1996)
 
 my @header_order = qw(
-   Cache-Control Connection Date Forwarded Message-ID MIME-Version
-   Pragma Upgrade
+   Cache-Control Connection Date Pragma Transfer-Encoding Upgrade Via
 
-   Accept Accept-Charset Accept-Encoding Accept-Language Authorization
-   From Host If-Modified-Since Proxy-Authorization Orig-URI
-   Range Referer Unless User-Agent
+   Accept Accept-Charset Accept-Encoding Accept-Language
+   Authorization From Host
+   If-Modified-Since If-Match If-None-Match If-Range If-Unmodified-Since
+   Max-Forwards Proxy-Authorization Range Referer User-Agent
 
-   Location Proxy-Authenticate Public Retry-After Server WWW-Authenticate
+   Age Location Proxy-Authenticate Public Retry-After Server Vary
+   Warning WWW-Authenticate
 
-   Allow Content-Encoding Content-Language Content-Length
-   Content-MD5 Content-Range Content-Type
-   Expires Last-Modified Link Title Transfer-Encoding URI Version
+   Allow Content-Base Content-Encoding Content-Language Content-Length
+   Content-Location Content-MD5 Content-Range Content-Type
+   ETag Expires Last-Modified
+
+   Alternates Content-Version Derived-From Link URI
 );
 
 # Make alternative representations of @header_order.  This is used
@@ -72,12 +76,12 @@ for (@header_order) {
 =head2 $h = new HTTP::Headers
 
 Constructs a new C<HTTP::Headers> object.  You might pass some initial
-attribute value pairs as parameters to the constructor.  E.g.:
+attribute-value pairs as parameters to the constructor.  I<E.g.>:
 
  $h = new HTTP::Headers
-     'Content-Type' => 'text/html',
-     'MIME-Version' => '1.0',
-     'Date'         => 'Thu, 03 Feb 1994 00:00:00 GMT';
+     Date         => 'Thu, 03 Feb 1994 00:00:00 GMT',
+     Content_Type => 'text/html; version=3.2',
+     Content_Base => 'http://www.sn.no/';
 
 =cut
 
@@ -95,19 +99,24 @@ sub new
 
 =head2 $h->header($field [=> $val],...)
 
-Get/Set the value of a request header.  The header field name is not
-case sensitive.  The value argument may be a scalar or a reference to
-a list of scalars. If the value argument is not defined then the
-header is not modified.
+Get or set the value of a header.  The header field name is not case
+sensitive.  To make the life easier for perl users who wants to avoid
+quoting before the => operator, you can use '_' as a synonym for '-'
+in header names.
+
+The value argument may be a scalar or a reference to a list of
+scalars. If the value argument is not defined, then the header is not
+modified.
 
 The header() method accepts multiple ($field => $value) pairs.
 
 The list of previous values for the last $field is returned.  Only the
 first header value is returned in scalar context.
 
- $header->header('MIME-Version' => '1.0',
-		 'User-Agent'   => 'My-Web-Client/0.01');
- $header->header('Accept' => "text/html, text/plain, image/*");
+ $header->header(MIME_Version => '1.0',
+		 User_Agent   => 'My-Web-Client/0.01');
+ $header->header(Accept => "text/html, text/plain, image/*");
+ $header->header(Accept => [qw(text/html text/plain image/*)]);
  @accepts = $header->header('Accept');
 
 =cut
@@ -125,6 +134,7 @@ sub header
 sub _header
 {
     my($self, $field, $val, $push) = @_;
+    $field =~ tr/_/-/;  # allow use of '_' as alternative to '-' in fields
 
     # $push is only used interally sub push_header
 
@@ -244,7 +254,7 @@ is not case sensitive.  The field need not already have a
 value. Previous values for the same field are retained.  The argument
 may be a scalar or a reference to a list of scalars.
 
- $header->push_header('Accept' => 'image/jpeg');
+ $header->push_header(Accept => 'image/jpeg');
 
 =head2 $h->remove_header($field,...)
 
@@ -261,14 +271,14 @@ following convenience methods.  These methods can both be used to read
 and to set the value of a header.  The header value is set if you pass
 an argument to the method.  The old header value is always returned.
 
-Methods that deal with dates/time always convert their value to system
+Methods that deal with dates/times always convert their value to system
 time (seconds since Jan 1, 1970) and they also expect this kind of
 value when the header value is set.
 
 =head2 $h->date
 
 This header represents the date and time at which the message was
-originated. E.g.:
+originated. I<E.g.>:
 
   $h->date(time);  # set current date
 
@@ -281,13 +291,13 @@ considered stale.
 
 This header is used to make a request conditional.  If the requested
 resource has not been modified since the time specified in this field,
-then the server til return a "304 Not Modified" response instead of
+then the server will return a C<"304 Not Modified"> response instead of
 the document itself.
 
 =head2 $h->last_modified
 
 This header indicates the date and time at which the resource was last
-modified. E.g.:
+modified. I<E.g.>:
 
   # check if document is more than 1 hour old
   if ($h->last_modified < time - 60*60) {
@@ -297,13 +307,13 @@ modified. E.g.:
 =head2 $h->content_type
 
 The Content-Type header field indicates the media type of the message
-content. E.g.:
+content. I<E.g.>:
 
   $h->content_type('text/html');
 
 The value returned will be converted to lower case, and potential
-parameters will be chopped off and returned as a separate value if
-array context.  This makes it safe to do the following:
+parameters will be chopped off and returned as a separate value if in
+an array context.  This makes it safe to do the following:
 
   if ($h->content_type eq 'text/html') {
      # we enter this place even if the real header value happens to
@@ -323,20 +333,22 @@ A decimal number indicating the size in bytes of the message content.
 
 =head2 $h->title
 
-The title of the document.  Will be obtained from the
-<TITLE>...</TITLE> element of HTML documentents.
+The title of the document.  In libwww-perl this header will be
+initialized automatically from the E<lt>TITLE>...E<lt>/TITLE> element
+of HTML documents.  I<This header is no longer part of the HTTP
+standard.>
 
 =head2 $h->user_agent
 
 This header field is used in request messages and contains information
-about the user agent originating the request.  E.g.:
+about the user agent originating the request.  I<E.g.>:
 
   $h->user_agent('Mozilla/1.2');
 
 =head2 $h->server
 
 The server header field contains information about the software being
-used by the origin server program handling the request.
+used by the originating server program handling the request.
 
 =head2 $h->from
 
@@ -369,7 +381,7 @@ This method is used to get or set an authorization header that use the
 values; the user name and the password.  In scalar context it will
 return I<"uname:password"> as a single string value.
 
-When used to set the header value, it expects two arguments.  E.g.:
+When used to set the header value, it expects two arguments.  I<E.g.>:
 
   $h->authorization_basic($uname, $password);
 
@@ -396,9 +408,10 @@ sub push_header
 
 sub remove_header
 {
-    my $self = shift;
+    my($self, @fields) = @_;
     my $field;
-    foreach $field (@_) {
+    foreach $field (@fields) {
+	$field =~ tr/_/-/;
 	delete $self->{'_header'}{lc $field};
     }
 }

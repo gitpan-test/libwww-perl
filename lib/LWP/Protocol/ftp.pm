@@ -1,5 +1,5 @@
 #
-# $Id: ftp.pm,v 1.13 1996/05/08 16:25:58 aas Exp $
+# $Id: ftp.pm,v 1.16 1996/07/17 08:52:00 aas Exp $
 
 # Implementation of the ftp protocol (RFC 959). We let the Net::FTP
 # package do all the dirty work.
@@ -20,7 +20,7 @@ require LWP::Protocol;
 use strict;
 eval {
     require Net::FTP;
-    Net::FTP->require_version('1.10');
+    Net::FTP->require_version(2.00);
 };
 my $init_failed = $@;
 
@@ -96,9 +96,8 @@ sub request
     LWP::Debug::debug("Logging in as $user (password $password)...");
     unless ($ftp->login($user, $password, $acct)) {
 	# Unauthorized.  Let's fake a RC_UNAUTHORIZED response
-	my $res =  new HTTP::Response &HTTP::Status::RC_UNAUTHORIZED, $@;
+	my $res =  new HTTP::Response &HTTP::Status::RC_UNAUTHORIZED, $ftp->message;
 	$res->header("WWW-Authenticate", qq(Basic Realm="FTP login"));
-	$res->content($ftp->message);
 	return $res;
     }
     LWP::Debug::debug($ftp->message);
@@ -145,7 +144,7 @@ sub request
 		    return \$content;
 		} );
 	    }
-	    if ($data->close != 2) {
+	    unless ($data->close) {
 		# Something did not work too well
 		if ($method ne 'HEAD') {
 		    $response->code(&HTTP::Status::RC_INTERNAL_SERVER_ERROR);
@@ -162,8 +161,8 @@ sub request
 	    }
 
 	    # It should now be safe to try to list the directory
-	    LWP::Debug::debug("lsl");
-	    my @lsl = $ftp->lsl;
+	    LWP::Debug::debug("dir");
+	    my @lsl = $ftp->dir;
 
 	    # Try to figure out if the user want us to convert the
 	    # directory listing to HTML.
@@ -178,7 +177,7 @@ sub request
 	    my $content = '';
 
 	    if (!defined($prefer)) {
-		return new HTTP::Response &HTTP::Status::RC_NONE_ACCEPTABLE,
+		return new HTTP::Response &HTTP::Status::RC_NOT_ACCEPTABLE,
 				   "Neither HTML nor directory listing wanted";
 	    } elsif ($prefer eq 'html') {
 		$response->header('Content-Type' => 'text/html');

@@ -1,9 +1,9 @@
 #
-# $Id: LWP.pm,v 1.78 1998/05/07 15:08:26 aas Exp $
+# $Id: LWP.pm,v 1.80 1998/07/06 20:51:29 aas Exp $
 
 package LWP;
 
-$VERSION = "5.33";
+$VERSION = "5.34";
 sub Version { $VERSION; }
 
 require 5.004;
@@ -423,7 +423,8 @@ want this).
 The normal file retrievals, the "Content-Type" is guessed based on the
 file name suffix. See L<LWP::MediaTypes>.
 
-The "If-Modified-Since" header is not honored yet.
+The "If-Modified-Since" request header works for servers that implement
+the MDTM command.  It will probably not work for directory listings though.
 
 Example:
 

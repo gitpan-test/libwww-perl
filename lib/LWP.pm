@@ -3,7 +3,7 @@
 
 package LWP;
 
-$VERSION = "5.18_03";
+$VERSION = "5.18_04";
 sub Version { $VERSION; }
 
 require 5.004;

@@ -11,8 +11,8 @@ HTML::AsSubs - functions that construct a HTML syntax tree
 	   h1("This is the heading"),
 	   p("This is the first paragraph which contains a ",
 	     a({href=>'link.html'}, "link"),
-	     " and an "
-	     img({src='img.gif', alt=>'image'}),
+	     " and an ",
+	     img({src=>'img.gif', alt=>'image'}),
 	     "."
 	    ),
 	  );
@@ -49,6 +49,13 @@ This module was inspired by the following message:
  p.p.s. I'll turn this into a much more practical example in a day or two.
  p.p.p.s. It's a pity that overloads are not inherited. Is this a bug?
 
+=head1 BUGS
+
+The exported link() function overrides the builtin link() function.
+The exported tr() function must be called using &tr(...) syntax
+because it clashes with the builtin tr/../../ operator.
+
+
 =head1 SEE ALSO
 
 L<HTML::Element>
@@ -60,7 +67,7 @@ require Exporter;
 @ISA = qw(Exporter);
 
 @TAGS = qw(html
-	   header title base link meta isindex nextid
+	   head title base link meta isindex nextid
 	   body h1 h2 h3 h4 h5 h6 p pre address blockquote
 	   a img br hr
 	   ol ul dir menu li
@@ -83,14 +90,12 @@ if ($@) {
 sub _elem
 {
     my $tag = shift;
-    my @attributes;
+    my $attributes;
     if (@_ and defined $_[0] and ref($_[0]) eq "HASH") {
-	@attributes = %{ shift; };
+	$attributes = shift;
     }
-    my $elem = new HTML::Element $tag, @attributes;
-    for (@_) {
-	$elem->push_content($_);
-    }
+    my $elem = new HTML::Element $tag, %$attributes;
+    $elem->push_content(@_);
     $elem;
 }
 

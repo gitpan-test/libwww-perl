@@ -1,9 +1,9 @@
 #
-# $Id: LWP.pm,v 1.31 1996/05/08 16:35:18 aas Exp $
+# $Id: LWP.pm,v 1.34 1996/05/26 10:36:16 aas Exp $
 
 package LWP;
 
-$VERSION = "4.999";
+$VERSION = "5.00";
 
 sub Version { $VERSION; }
 
@@ -23,7 +23,7 @@ LWP - Library for WWW access in Perl
 
 Libwww-perl is a collection of Perl modules which provides a simple
 and consistent programming interface (API) to the World-Wide Web.  The
-main focus of the library is to provide objects and functions that
+main focus of the library is to provide classes and functions that
 allow you to write WWW clients, thus libwww-perl said to be a WWW
 client library. The library also contain modules that are of more
 general use.
@@ -81,8 +81,8 @@ text).
 
 =item *
 
-The library can cooperate with Tk.  A simple Tk-based GUI browser is
-distributed with the Tk extention for perl.
+The library can cooperate with Tk.  A simple Tk-based GUI browser
+called 'tkweb' is distributed with the Tk extention for perl.
 
 =item *
 
@@ -101,7 +101,7 @@ A simple command line client application called C<lwp-request>.
 
 
 The libwww-perl library is based on HTTP style communication. This
-section tries to describe what that means.
+section try to describe what that means.
 
 Let us start with this quote from the HTTP specification document
 <URL:http://www.w3.org/pub/WWW/Protocols/>:
@@ -124,18 +124,20 @@ information, entity metainformation, and possible body content.
 What this means to libwww-perl is that communcation always take place
 through these steps: First a I<request> object is created and
 configured. This object is then passed to a server and we get a
-I<response> object in return that we can examine. The same simple
-model is used for any kind of service we want to access.
+I<response> object in return that we can examine. A request is always
+independent of any previous requests, i.e. the service is stateless.
+The same simple model is used for any kind of service we want to
+access.
 
-If we want to fetch a document from a remote file server, then we send
-it a request that contains a name for that document and the response
-will contain the document itself.  If we access a search engine,
-then the content of the request will contain the query parameters and
-the response will contain the query result.  If we want to send a mail
-message to somebody then we send a request object which contains our
-message to the mail server and the response object will contain an
-acknowledgment that tells us that the message has been accepted and
-will be forwarded to the receipients.
+For example, if we want to fetch a document from a remote file server,
+then we send it a request that contains a name for that document and
+the response will contain the document itself.  If we access a search
+engine, then the content of the request will contain the query
+parameters and the response will contain the query result.  If we want
+to send a mail message to somebody then we send a request object which
+contains our message to the mail server and the response object will
+contain an acknowledgment that tells us that the message has been
+accepted and will be forwarded to the receipient(s).
 
 It is as simple as that!
 
@@ -402,14 +404,14 @@ The "If-Modified-Since" header is not honored yet.
 
 Example:
 
-  $req = HTTP::Request->new('GET', 'ftp://me:passwd@ftp.some.where/');
+  $req = HTTP::Request->new('GET', 'ftp://me:passwd@ftp.some.where.com/');
   $req->header("Accept", "text/html, */*;q=0.1");
 
 =head2 News Requests
 
 Access to the USENET News system is implemented through the NNTP
 protocol.  The name of the news server is obtained from the
-NNTP_SERVER envirionment variable and defaults to "news".  It is not
+NNTP_SERVER environment variable and defaults to "news".  It is not
 possible to specify the hostname of the NNTP server in the news:-URLs.
 
 The library support GET and HEAD to retrive news articles through the
@@ -453,7 +455,7 @@ Example:
 The library supports GET and HEAD methods for file requests.  The
 "If-Modified-Since" header is supported.  All other headers are
 ignored.  The I<host> component of the file URL must be empty or set
-to "localhost".
+to "localhost".  Any other I<host> value will be treated as an error.
 
 Directories are always converted to an HTML document.  For normal
 files, the "Content-Type" and "Content-Encoding" in the response are
@@ -502,7 +504,7 @@ library. Indentation shows class inheritance.
 
  WWW::RobotRules    -- Parse robots.txt files
 
- HTML::Parse        -- Parse HTML documents
+ HTML::Parser       -- Parse HTML documents
  HTML::Element      -- Building block for the parser
  HTML::Formatter    -- Convert HTML to readable formats
 
@@ -534,15 +536,16 @@ distributions for them.  Regard them as bonus.
 =head1 MORE DOCUMENTATION
 
 All modules contain detailed information on the interfaces they
-provide.  The L<lwpcook> is the libwww-perl cookbook that
-contain examples of typical usage of the library.  You might want to
-take a look at how the scripts C<lwp-request> and C<lwp-mirror> are
-implemented.
+provide.  The L<lwpcook> is the libwww-perl cookbook that contain
+examples of typical usage of the library.  You might want to take a
+look at how the scripts C<lwp-request>, C<lwp-rget> and C<lwp-mirror>
+are implemented.
 
 =head1 BUGS
 
 The library can not handle multiple simultaneous requests.  The HTML::
-modules are still experimental.  Check what's left in the TODO file.
+modules are still experimental.  Also, check out what's left in the
+TODO file.
 
 =head1 ACKNOWLEDGEMENTS
 

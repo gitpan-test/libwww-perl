@@ -1,3 +1,49 @@
+Sun May 26 1996   Gisle Aas <aas@sn.no>
+
+ o  Release 5.00.
+
+ o  LWP::Simple::head() now return something useful in scalar context.
+
+ o  Rewritten the HTML::Parse stuff.  Introduced the HTML::Parser class
+    that will tokenize a HTML document.  The rest of the old
+    HTML::Parse functionality has moved to HTML::TreeBuilder class.
+    Note, that the HTML stuff is still alpha.
+
+ o  Implemented HTML::HeadParser.  This is a lightweight parser for
+    the <HEAD> section of a HTML document.
+
+ o  HTML::Element had problem with presenting things like <foo
+    bar="bar">.
+
+ o  HTML::Entities: Included additional ISO-8859/1 entities listed in
+    RFC1866.
+
+ o  HTML::AsSubs exported 'header' instead of 'head'
+
+ o  We know about a few more of the HTML 3.2 element.
+
+ o  HTTP::Date had problems with years before 1970, because Time::Local
+    went into an infinite loop.  Check for this.
+
+ o  Added $header->title method.
+
+ o  Made $header->authorization_basic return "uname:passwd" in scalar
+    context
+
+ o  LWP::Protocol::collect() will let the HTML::HeadParser look at the
+    document content as it arrives.  This will initialize headers from
+    elements like <base href="...">, <title>...</title> and <meta
+    http-equiv="..." ...>.
+
+ o  Simplified $response->base implementation, because we don't have
+    to look into the content any more.
+
+ o  Added -quiet option to lwp-rget
+
+ o  Typo fixes and some documentation additions.
+
+
+
 Thu May  9 1996   Gisle Aas <aas@sn.no>
 
  o  Release 5b13

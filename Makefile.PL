@@ -1,5 +1,5 @@
 # This -*- perl -*- script writes the Makefile for libwww-perl
-# $Id: Makefile.PL,v 1.46 1998/04/02 05:49:22 aas Exp $
+# $Id: Makefile.PL,v 1.47.2.1 1998/10/12 12:45:48 aas Exp $
 
 require 5.004;
 use strict;
@@ -27,6 +27,27 @@ unless (getopts("n")) {
 $| = 1;
 my $missing_modules = 0;
 
+print "Checking for URI...........";
+eval {
+    require URI;
+    my $ver = $URI::VERSION;
+    $ver =~ s/_//;
+    die "URI version 0.90_02 needed, installed module is only $URI::VERSION\n"
+	unless $ver >= 0.9002;
+};
+if ($@) {
+    print " failed\n";
+    $missing_modules++;
+    print <<EOT;
+$@
+The URI module must be installed.  WWW without URIs would not
+be that great :-)
+
+EOT
+    sleep(2);  # Don't hurry too much
+} else {
+    print " ok\n";
+}
 print "Checking for HTML::Parser..";
 eval {
     require HTML::HeadParser;

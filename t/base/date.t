@@ -3,7 +3,7 @@ use HTTP::Date;
 require Time::Local if $^O eq "MacOS";
 my $offset = ($^O eq "MacOS") ? Time::Local::timegm(0,0,0,1,0,70) : 0;
 
-print "1..59\n";
+print "1..60\n";
 
 $no = 1;
 $| = 1;
@@ -13,7 +13,8 @@ sub ok {
    $no++;
 }
 
-# test str2time for supported dates
+# test str2time for supported dates.  Test cases with 2 digit year
+# will probably break in year 2044.
 my(@tests) =
 (
  'Thu Feb  3 00:00:00 GMT 1994',        # ctime format
@@ -59,17 +60,23 @@ my(@tests) =
  '  03   Feb   1994  0:00  ',
 );
 
-my $time = (760233600 + $offset) | 0;  # assume broken POSIX counting of seconds
+my $time = (760233600 + $offset);  # assume broken POSIX counting of seconds
 for (@tests) {
+    my $t;
     if (/GMT/i) {
 	$t = str2time($_);
     } else {
 	$t = str2time($_, "GMT");
     }
+    my $t2 = str2time(lc($_), "GMT");
+    my $t3 = str2time(uc($_), "GMT");
+
     $t = "UNDEF" unless defined $t;
     print "'$_'  =>  $t\n";
     print $@ if $@;
-    print "not " if $t eq 'UNDEF' || $t != $time;
+    print "not " if $t eq 'UNDEF' || $t  != $time
+	                          || $t2 != $time
+	                          || $t3 != $time;
     ok;
 }
 
@@ -93,8 +100,8 @@ ok;
 for ('03-Feb-1969', '03-Feb-2039',
      undef, '', 'Garbage',
      'Mandag 16. September 1996',
-     'Thu Feb  3 00:00:00 CET 1994',
-     'Thu, 03 Feb 1994 00:00:00 CET',
+#     'Thu Feb  3 00:00:00 CET 1994',
+#     'Thu, 03 Feb 1994 00:00:00 CET',
      'Wednesday, 31-Dec-69 23:59:59 GMT',
 
      '1980-00-01',
@@ -163,6 +170,21 @@ print "GMT   $az $bz\n";
 for ($a,  $b)  { ok if /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/;  }
 for ($az, $bz) { ok if /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\dZ$/; }
 
+# Test the parse_date interface
+use HTTP::Date qw(parse_date);
 
+@d = parse_date("Jan 1 2001");
 
-print "HTTP::Date $HTTP::Date::VERSION tested ok\n";
+print "not " if defined(pop(@d)) ||
+                "@d" ne "2001 1 1 0 0 0";
+ok;
+
+# This test will break around year 2070
+print "not " unless parse_date("03-Feb-20") eq "2020-02-03 00:00:00";
+ok;
+
+# This test will break around year 2048
+print "not " unless parse_date("03-Feb-98") eq "1998-02-03 00:00:00";
+ok;
+
+print "HTTP::Date $HTTP::Date::VERSION\n";

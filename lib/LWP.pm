@@ -1,9 +1,9 @@
 #
-# $Id: LWP.pm,v 1.68 1998/01/26 11:05:01 aas Exp $
+# $Id: LWP.pm,v 1.70 1998/02/12 22:42:08 aas Exp $
 
 package LWP;
 
-$VERSION = "5.19";
+$VERSION = "5.20";
 sub Version { $VERSION; }
 
 require 5.004;
@@ -189,7 +189,7 @@ The B<content> is an arbitrary amount of data.
 
 =head2 The Response Object
 
-The request object has the class name C<HTTP::Response> in
+The response object has the class name C<HTTP::Response> in
 libwww-perl.  The main attributes of objects of this class are:
 
 =over 3

@@ -1,5 +1,5 @@
 #
-# $Id: http.pm,v 1.39 1998/02/12 22:24:11 aas Exp $
+# $Id: http.pm,v 1.41 1998/03/04 15:45:41 aas Exp $
 
 package LWP::Protocol::http;
 
@@ -114,7 +114,8 @@ sub request
     {
 	my $host = $url->netloc;
 	$host =~ s/^([^\@]*)\@//;  # get rid of potential "user:pass@"
-	$request->header('Host' => $host);
+	$request->header('Host' => $host)
+	    unless defined $request->header('Host');
 
 	# add authorization header if we need them
 	if (defined($1) && not $request->header('Authorization')) {
@@ -175,7 +176,7 @@ sub request
 
 	    # ensure that we have read all headers.  The headers will be
 	    # terminated by two blank lines
-	    while ($buf !~ /\015?\012\015?\012/) {
+	    until ($buf =~ /^\015?\012/ || $buf =~ /\015?\012\015?\012/) {
 		# must read more if we can...
 		LWP::Debug::debug("need more header data");
 		die "read timeout" if $timeout && !$sel->can_read($timeout);

@@ -1,8 +1,9 @@
 #
-# $Id: Escape.pm,v 3.7 1997/12/02 12:39:48 aas Exp $
+# $Id: Escape.pm,v 3.9 1998/01/12 10:52:32 aas Exp $
 #
 
 package URI::Escape;
+use strict;
 
 =head1 NAME
 
@@ -42,7 +43,7 @@ character class (between [ ]).  E.g.:
 
 The default set of characters to be escaped is:
 
-  \x00-\x20"#%;<>?{}|\\\\^~`\[\]\x7F-\xFF
+  \x00-\x20"#%;<>?{}|\\^~`\[\]\x7F-\xFF
 
 =item uri_unescape($string)
 
@@ -68,10 +69,14 @@ it under the same terms as Perl itself.
 
 =cut
 
+use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
+use vars qw(%escapes);
+
 require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(uri_escape uri_unescape);
 @EXPORT_OK = qw(%escapes);
+$VERSION = sprintf("%d.%02d", q$Revision: 3.9 $ =~ /(\d+)\.(\d+)/);
 
 use Carp ();
 
@@ -79,6 +84,8 @@ use Carp ();
 for (0..255) {
     $escapes{chr($_)} = sprintf("%%%02X", $_);
 }
+
+my %subst;  # compiled patternes
 
 sub uri_escape
 {
@@ -94,7 +101,7 @@ sub uri_escape
 	&{$subst{$patn}}($text);
     } else {
 	# Default unsafe characters. (RFC1738 section 2.2)
-	$text =~ s/([\x00-\x20"#%;<>?{}|\\\\^~`\[\]\x7F-\xFF])/$escapes{$1}/g; #"
+	$text =~ s/([\x00-\x20\"#%;<>?{}|\\^~`\[\]\x7F-\xFF])/$escapes{$1}/g;
     }
     $text;
 }

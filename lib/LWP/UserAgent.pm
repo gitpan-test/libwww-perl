@@ -1,7 +1,7 @@
-# $Id: UserAgent.pm,v 1.55 1997/12/16 20:08:21 aas Exp $
+# $Id: UserAgent.pm,v 1.57 1998/01/06 10:20:38 aas Exp $
 
 package LWP::UserAgent;
-
+use strict;
 
 =head1 NAME
 
@@ -88,9 +88,12 @@ The following methods are available:
 =cut
 
 
+use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.57 $ =~ /(\d+)\.(\d+)/);
+
 
 require URI::URL;
 require HTTP::Request;
@@ -205,6 +208,7 @@ sub simple_request
     $protocol->parse_head($parse_head);
     $protocol->max_size($max_size);
     
+    my $response;
     if ($use_eval) {
 	# we eval, and turn dies into responses below
 	eval {
@@ -310,6 +314,7 @@ sub request
 	my $class = "LWP::Authen::\u$scheme";
 	$class =~ s/-/_/g;
 	
+	no strict 'refs';
 	unless (defined %{"$class\::"}) {
 	    # try to load it
 	    eval "require $class";
@@ -621,6 +626,7 @@ envirionment variables.
 
 sub env_proxy {
     my ($self) = @_;
+    my($k,$v);
     while(($k, $v) = each %ENV) {
 	$k = lc($k);
 	next unless $k =~ /^(.*)_proxy$/;

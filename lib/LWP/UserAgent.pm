@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 1.77 2001/03/14 20:48:19 gisle Exp $
+# $Id: UserAgent.pm,v 1.80 2001/03/19 19:30:16 gisle Exp $
 
 package LWP::UserAgent;
 use strict;
@@ -92,7 +92,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.77 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.80 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -196,9 +196,9 @@ sub simple_request
                   use_eval parse_head max_size)};
 
     # Set User-Agent and From headers if they are defined
-    $request->header('User-Agent' => $agent) if $agent;
-    $request->header('From' => $from) if $from;
-    $request->header('Range' => "bytes=0-$max_size") if $max_size;
+    $request->init_header('User-Agent' => $agent) if $agent;
+    $request->init_header('From' => $from) if $from;
+    $request->init_header('Range' => "bytes=0-$max_size") if $max_size;
     $cookie_jar->add_cookie_header($request) if $cookie_jar;
 
     # Transfer some attributes to the protocol object
@@ -262,7 +262,7 @@ sub request
 	my $referral = $request->clone;
 
 	# And then we update the URL based on the Location:-header.
-	my $referral_uri = $response->header('Location');
+	my($referral_uri) = $response->header('Location');
 	{
 	    # Some servers erroneously return a relative URL for redirects,
 	    # so make it absolute if it not already is.

@@ -1,4 +1,4 @@
-# $Id: Date.pm,v 1.24 1997/04/03 10:51:13 aas Exp $
+# $Id: Date.pm,v 1.26 1997/09/01 08:39:23 aas Exp $
 #
 package HTTP::Date;
 
@@ -99,7 +99,7 @@ modify it under the same terms as Perl itself.
 =cut
 
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
 sub Version { $VERSION; }
 
 require 5.002;
@@ -153,7 +153,7 @@ sub str2time ($;$)
    my $offset = 0;  # used when compensating for timezone
 
  PARSEDATE: {
-      # Then we are able to check for most the other formats with this regexp
+      # Then we are able to check for most of the formats with this regexp
       ($day,$mon,$yr,$hr,$min,$sec,$tz) =
 	/^\s*
 	 (\d\d?)               # day
@@ -232,9 +232,9 @@ sub str2time ($;$)
              -
           (\d{2})                # year
              \s+
-          (\d\d?):(\d\d)(am|pm)  # hour:min am or pm
+          (\d\d?):(\d\d)([apAP][mM])  # hour:min AM or PM
              \s*$
-        /ix
+        /x
           and last PARSEDATE;
 
       # If it is not recognized by now we give up
@@ -276,7 +276,7 @@ sub str2time ($;$)
    if ($aorp) {
        $aorp = uc $aorp;
        $hr = 0 if $hr == 12 && $aorp eq 'AM';
-       $hr += 12 if $aorp eq 'PM';
+       $hr += 12 if $aorp eq 'PM' && $hr != 12;
    }
 
    # Make sure things are defined

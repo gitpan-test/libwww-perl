@@ -1,5 +1,5 @@
 #
-# $Id: ftp.pm,v 1.33 2003/10/14 18:57:30 gisle Exp $
+# $Id: ftp.pm,v 1.35 2003/10/16 11:06:07 gisle Exp $
 
 # Implementation of the ftp protocol (RFC 959). We let the Net::FTP
 # package do all the dirty work.
@@ -334,8 +334,8 @@ sub request
 				       " " . $ftp->message);
 		}
 	    }
-	} elsif (!length($remote_file) || $ftp->code == 550) {
-	    # 550 not a plain file, try to list instead
+	} elsif (!length($remote_file) || ( $ftp->code >= 400 && $ftp->code < 600 )) {
+	    # not a plain file, try to list instead
 	    if (length($remote_file) && !$ftp->cwd($remote_file)) {
 		LWP::Debug::debug("chdir before listing failed");
 		return HTTP::Response->new(&HTTP::Status::RC_NOT_FOUND,

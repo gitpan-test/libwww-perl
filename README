@@ -98,8 +98,8 @@ list.  This mailing list is also the place for general discussions and
 development of the libwww-perl package.
 
 You can join the mailing list by sending a message to
-<libwww-request@perl.org> with "subscribe" as subject.
-       ^^^^^^^^
+<libwww-subscribe@perl.org>.
+       ^^^^^^^^^^
 
 AVAILABILITY
 
@@ -114,7 +114,7 @@ site near you.
 
 COPYRIGHT
 
-  © 1995-1999 Gisle Aas. All rights reserved.
+  © 1995-2000 Gisle Aas. All rights reserved.
   © 1995 Martijn Koster. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify

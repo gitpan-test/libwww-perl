@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 1.69 1999/09/21 05:53:30 gisle Exp $
+# $Id: UserAgent.pm,v 1.73 2000/04/07 11:29:04 gisle Exp $
 
 package LWP::UserAgent;
 use strict;
@@ -10,9 +10,9 @@ LWP::UserAgent - A WWW UserAgent class
 =head1 SYNOPSIS
 
  require LWP::UserAgent;
- $ua = new LWP::UserAgent;
+ $ua = LWP::UserAgent->new;
 
- $request = new HTTP::Request('GET', 'file://localhost/etc/motd');
+ $request = HTTP::Request->new('GET', 'file://localhost/etc/motd');
 
  $response = $ua->request($request); # or
  $response = $ua->request($request, '/tmp/sss'); # or
@@ -92,7 +92,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.69 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.73 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -105,7 +105,7 @@ use LWP::Protocol ();
 use Carp ();
 
 
-=item $ua = new LWP::UserAgent;
+=item $ua = LWP::UserAgent->new;
 
 Constructor for the UserAgent.  Returns a reference to a
 LWP::UserAgent object.
@@ -169,7 +169,6 @@ sub simple_request
 	unless $url;
     return HTTP::Response->new(&HTTP::Status::RC_BAD_REQUEST, "URL must be absolute")
 	unless $url->scheme;
-	
 
     LWP::Debug::trace("$method $url");
 
@@ -205,7 +204,7 @@ sub simple_request
     # Transfer some attributes to the protocol object
     $protocol->parse_head($parse_head);
     $protocol->max_size($max_size);
-    
+
     my $response;
     if ($use_eval) {
 	# we eval, and turn dies into responses below
@@ -252,7 +251,9 @@ sub request
     my $code = $response->code;
     $response->previous($previous) if defined $previous;
 
-    LWP::Debug::debug('Simple result: ' . HTTP::Status::status_message($code));
+    LWP::Debug::debug('Simple response: ' .
+		      (HTTP::Status::status_message($code) ||
+		       "Unknown code $code"));
 
     if ($code == &HTTP::Status::RC_MOVED_PERMANENTLY or
 	$code == &HTTP::Status::RC_MOVED_TEMPORARILY) {
@@ -296,48 +297,51 @@ sub request
     {
 	my $proxy = ($code == &HTTP::Status::RC_PROXY_AUTHENTICATION_REQUIRED);
 	my $ch_header = $proxy ?  "Proxy-Authenticate" : "WWW-Authenticate";
-	my $challenge = $response->header($ch_header);
-	unless (defined $challenge) {
+	my @challenge = $response->header($ch_header);
+	unless (@challenge) {
 	    $response->header("Client-Warning" => 
 			      "Missing Authenticate header");
 	    return $response;
 	}
 
 	require HTTP::Headers::Util;
-	$challenge =~ tr/,/;/;  # "," is used to separate auth-params!!
-	($challenge) = HTTP::Headers::Util::split_header_words($challenge);
-	my $scheme = lc(shift(@$challenge));
-	shift(@$challenge); # no value
-	$challenge = { @$challenge };  # make rest into a hash
-	for (keys %$challenge) {       # make sure all keys are lower case
-	    $challenge->{lc $_} = delete $challenge->{$_};
-	}
+	CHALLENGE: for my $challenge (@challenge) {
+	    $challenge =~ tr/,/;/;  # "," is used to separate auth-params!!
+	    ($challenge) = HTTP::Headers::Util::split_header_words($challenge);
+	    my $scheme = lc(shift(@$challenge));
+	    shift(@$challenge); # no value
+	    $challenge = { @$challenge };  # make rest into a hash
+	    for (keys %$challenge) {       # make sure all keys are lower case
+		$challenge->{lc $_} = delete $challenge->{$_};
+	    }
 
-	unless ($scheme =~ /^([a-z]+(?:-[a-z]+)*)$/) {
-	    $response->header("Client-Warning" => 
-			      "Bad authentication scheme '$scheme'");
-	    return $response;
-	}
-	$scheme = $1;  # untainted now
-	my $class = "LWP::Authen::\u$scheme";
-	$class =~ s/-/_/g;
-	
-	no strict 'refs';
-	unless (%{"$class\::"}) {
-	    # try to load it
-	    eval "require $class";
-	    if ($@) {
-		if ($@ =~ /^Can\'t locate/) {
-		    $response->header("Client-Warning" =>
-				      "Unsupported authentication scheme '$scheme'");
-		} else {
-		    $response->header("Client-Warning" => $@);
-		}
+	    unless ($scheme =~ /^([a-z]+(?:-[a-z]+)*)$/) {
+		$response->header("Client-Warning" => 
+				  "Bad authentication scheme '$scheme'");
 		return $response;
 	    }
+	    $scheme = $1;  # untainted now
+	    my $class = "LWP::Authen::\u$scheme";
+	    $class =~ s/-/_/g;
+	
+	    no strict 'refs';
+	    unless (%{"$class\::"}) {
+		# try to load it
+		eval "require $class";
+		if ($@) {
+		    if ($@ =~ /^Can\'t locate/) {
+			$response->header("Client-Warning" =>
+					  "Unsupported authentication scheme '$scheme'");
+		    } else {
+			$response->header("Client-Warning" => $@);
+		    }
+		    next CHALLENGE;
+		}
+	    }
+	    return $class->authenticate($self, $proxy, $challenge, $response,
+					$request, $arg, $size);
 	}
-	return $class->authenticate($self, $proxy, $challenge, $response,
-				    $request, $arg, $size);
+	return $response;
     }
     return $response;
 }
@@ -433,7 +437,7 @@ the requesting user agent.  The address should be machine-usable, as
 defined in RFC 822.  The from value is send as the "From" header in
 the requests.  There is no default.  Example:
 
-  $ua->from('aas@sn.no');
+  $ua->from('gaas@cpan.org');
 
 =item $ua->timeout([$secs])
 
@@ -534,7 +538,7 @@ sub mirror
     my($self, $url, $file) = @_;
 
     LWP::Debug::trace('()');
-    my $request = new HTTP::Request('GET', $url);
+    my $request = HTTP::Request->new('GET', $url);
 
     if (-e $file) {
 	my($mtime) = (stat($file))[9];
@@ -598,20 +602,16 @@ proxy URL for a single access scheme.
 
 sub proxy
 {
-    my($self, $key, $proxy) = @_;
+    my $self = shift;
+    my $key  = shift;
 
-    LWP::Debug::trace("$key, $proxy");
+    LWP::Debug::trace("$key @_");
 
-    if (!ref($key)) {   # single scalar passed
-	my $old = $self->{'proxy'}{$key};
-	$self->{'proxy'}{$key} = $proxy;
-	return $old;
-    } elsif (ref($key) eq 'ARRAY') {
-	for(@$key) {    # array passed
-	    $self->{'proxy'}{$_} = $proxy;
-	}
-    }
-    return undef;
+    return map $self->proxy($_, @_), @$key if ref $key;
+
+    my $old = $self->{'proxy'}{$key};
+    $self->{'proxy'}{$key} = shift if @_;
+    return $old;
 }
 
 =item $ua->env_proxy()
@@ -702,7 +702,7 @@ F<lwp-mirror> for examples of usage.
 
 =head1 COPYRIGHT
 
-Copyright 1995-1998 Gisle Aas.
+Copyright 1995-2000 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

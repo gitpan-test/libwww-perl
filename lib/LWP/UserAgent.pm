@@ -1,13 +1,13 @@
 package LWP::UserAgent;
 
-# $Id: UserAgent.pm,v 2.28 2004/04/07 09:47:37 gisle Exp $
+# $Id: UserAgent.pm,v 2.31 2004/04/10 11:26:14 gisle Exp $
 
 use strict;
 use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%03d", q$Revision: 2.28 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 2.31 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -291,6 +291,15 @@ sub request
 	# These headers should never be forwarded
 	$referral->remove_header('Host', 'Cookie');
 	
+	if ($referral->header('Referer') &&
+	    $request->url->scheme eq 'https' &&
+	    $referral->url->scheme eq 'http')
+	{
+	    # RFC 2616, section 15.1.3.
+	    LWP::Debug::trace("https -> http redirect, suppressing Referer");
+	    $referral->remove_header('Referer');
+	}
+
 	if ($code == &HTTP::Status::RC_SEE_OTHER ||
 	    $code == &HTTP::Status::RC_FOUND) 
         {
@@ -508,7 +517,7 @@ sub requests_redirectable  { shift->_elem('requests_redirectable', @_) }
 
 sub redirect_ok
 {
-    # RFC 2068, section 10.3.2 and 10.3.3 say:
+    # RFC 2616, section 10.3.2 and 10.3.3 say:
     #  If the 30[12] status code is received in response to a request other
     #  than GET or HEAD, the user agent MUST NOT automatically redirect the
     #  request unless it can be confirmed by the user, since this might
@@ -1028,7 +1037,7 @@ To delete the list, call: C<$ua-E<gt>protocols_forbidden(undef)>
 
 This reads or sets the object's list of request names that
 C<$ua-E<gt>redirect_ok(...)> will allow redirection for.  By
-default, this is C<['GET', 'HEAD']>, as per RFC 2068.  To
+default, this is C<['GET', 'HEAD']>, as per RFC 2616.  To
 change to include 'POST', consider:
 
    push @{ $ua->requests_redirectable }, 'POST';

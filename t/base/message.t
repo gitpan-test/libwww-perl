@@ -1,129 +1,257 @@
-print "1..18\n";
+#!perl -w
 
-require HTTP::Request;
-require HTTP::Response;
+use strict;
+use Test qw(plan ok);
 
-require Time::Local if $^O eq "MacOS";
-my $offset = ($^O eq "MacOS") ? Time::Local::timegm(0,0,0,1,0,70) : 0;
+plan tests => 58;
 
-$req = new HTTP::Request 'GET', "http://www.sn.no/";
-$req->header(
-	"if-modified-since" => "Thu, 03 Feb 1994 00:00:00 GMT",
-	"mime-version"      => "1.0");
+require HTTP::Message;
 
-$str = $req->as_string;
+my($m, $m2, @parts);
 
-print $str;
+$m = HTTP::Message->new;
+ok($m);
+ok(ref($m), "HTTP::Message");
+ok(ref($m->headers), "HTTP::Headers");
+ok($m->as_string, "\n");
+ok($m->headers->as_string, "");
+ok($m->headers_as_string, "");
+ok($m->content, "");
 
-$str =~ /^GET/m || print "not ";
-print "ok 1\n";
+$m->header("Foo", 1);
+ok($m->as_string, "Foo: 1\n\n");
 
-$req->header("MIME-Version") eq "1.0" || print "not ";
-print "ok 2\n";
+$m2 = HTTP::Message->new($m->headers);
+$m2->header(bar => 2);
+ok($m->as_string, "Foo: 1\n\n");
+ok($m2->as_string, "Bar: 2\nFoo: 1\n\n");
 
-$req->content("gisle");
-$req->add_content(" aas");
-$req->add_content(\ " old interface is depreciated");
+$m2 = HTTP::Message->new($m->headers, "foo");
+ok($m2->as_string, "Foo: 1\n\nfoo\n");
+ok($m2->as_string("<<\n"), "Foo: 1<<\n<<\nfoo");
+$m2 = HTTP::Message->new($m->headers, "foo\n");
+ok($m2->as_string, "Foo: 1\n\nfoo\n");
 
-${$req->content_ref} =~ s/\s+is\s+depreciated//;
+$m = HTTP::Message->new([a => 1, b => 2], "abc");
+ok($m->as_string, "A: 1\nB: 2\n\nabc\n");
 
-print "Content is: ", $req->content, "\n";
+$m = HTTP::Message->parse("");
+ok($m->as_string, "\n");
+$m = HTTP::Message->parse("\n");
+ok($m->as_string, "\n");
+$m = HTTP::Message->parse("\n\n");
+ok($m->as_string, "\n\n");
+ok($m->content, "\n");
 
-$req->content eq "gisle aas old interface" || print "not ";
-print "ok 3\n";
+$m = HTTP::Message->parse("foo");
+ok($m->as_string, "\nfoo\n");
+$m = HTTP::Message->parse("foo: 1");
+ok($m->as_string, "Foo: 1\n\n");
+$m = HTTP::Message->parse("foo: 1\n\nfoo");
+ok($m->as_string, "Foo: 1\n\nfoo\n");
+$m = HTTP::Message->parse(<<EOT);
+FOO : 1
+ 2
+  3
+   4
+bar:
+ 1
+Baz: 1
 
-$req->if_modified_since == ((760233600 + $offset) | 0) || print "not ";
-print "ok 4\n";
-
-$time = time;
-
-$req->date($time);
-$timestr = gmtime($time);
-($month) = ($timestr =~ /^\S+\s+(\S+)/);  # extract month;
-
-print "These should represent the same time:\n\t", $req->header('Date'), "\n\t$timestr\n";
-
-$req->header('Date') =~ /\Q$month/ || print "not ";
-print "ok 5\n";
-
-$req->authorization_basic("gisle", "passwd");
-$auth = $req->header("Authorization");
-
-print "$auth\n";
-$auth =~ /Z2lzbGU6cGFzc3dk/ || print "not ";
-print "ok 6\n";
-
-($user, $pass) = $req->authorization_basic;
-($user eq "gisle" && $pass eq "passwd") || print "not ";
-print "ok 7\n";
-
-# Check the response
-$res = new HTTP::Response 200, "This message";
-
-$html = $res->error_as_HTML;
-print $html;
-
-($html =~ /<head>/i && $html =~ /This message/) || print "not ";
-print "ok 8\n";
-
-$res->is_success || print "not ";
-print "ok 9\n";
-
-$res->content_type("text/html;version=3.0");
-$res->content("<html>...</html>\n");
-
-$res2 = $res->clone;
-
-print $res2->as_string;
-
-$res2->header("cOntent-TYPE") eq "text/html;version=3.0" || print "not ";
-print "ok 10\n";
-
-$res2->code == 200 || print "not ";
-print "ok 11\n";
-
-$res2->content =~ />\.\.\.</ || print "not ";
-print "ok 12\n";
-
-# Check the base method:
-
-$res = new HTTP::Response 200, "This message";
-$res->request($req);
-$res->content_type("image/gif");
-
-$res->base eq "http://www.sn.no/" || print "not ";
-print "ok 13\n";
-
-$res->header('Base', 'http://www.sn.no/xxx/');
-
-$res->base eq "http://www.sn.no/xxx/" || print "not ";
-print "ok 14\n";
-
-# Check the AUTLOAD delegate method with regular expressions
-"This string contains text/html" =~ /(\w+\/\w+)/;
-$res->content_type($1);
-
-$res->content_type eq "text/html" || print "not ";
-print "ok 15\n";
-
-# Check what happens when passed a new URI object
-require URI;
-$req = HTTP::Request->new(GET => URI->new("http://localhost"));
-print "not " unless $req->uri eq "http://localhost";
-print "ok 16\n";
-
-$req = HTTP::Request->new(GET => "http://www.example.com",
-	                  [ Foo => 1, bar => 2 ], "FooBar\n");
-print "not " unless $req->as_string eq <<EOT;  print "ok 17\n";
-GET http://www.example.com
-Bar: 2
+foobarbaz
+EOT
+ok($m->as_string, <<EOT);
+Bar: 
+ 1
+Baz: 1
 Foo: 1
+ 2
+  3
+   4
 
-FooBar
+foobarbaz
 EOT
 
-$req->clear;
-print "not " unless $req->as_string eq <<EOT;  print "ok 18\n";
-GET http://www.example.com
+$m = HTTP::Message->parse("  abc\nfoo: 1\n");
+ok($m->as_string, "\n  abc\nfoo: 1\n");
+$m = HTTP::Message->parse(" foo : 1\n");
+ok($m->as_string, "\n foo : 1\n");
 
+$m = HTTP::Message->new([a => 1, b => 2], "abc");
+ok($m->content("foo\n"), "abc");
+ok($m->content, "foo\n");
+
+$m->add_content("bar\n");
+ok($m->content, "foo\nbar\n");
+
+ok(ref($m->content_ref), "SCALAR");
+ok(${$m->content_ref}, "foo\nbar\n");
+${$m->content_ref} =~ s/[ao]/i/g;
+ok($m->content, "fii\nbir\n");
+
+$m->clear;
+ok($m->headers->header_field_names, 0);
+ok($m->content, "");
+
+ok($m->parts, undef);
+$m->parts(HTTP::Message->new,
+	  HTTP::Message->new([a => 1], "foo"),
+	  HTTP::Message->new(undef, "bar\n"),
+         );
+ok($m->parts->as_string, "\n");
+
+my $str = $m->as_string;
+$str =~ s/\r/<CR>/g;
+ok($str, <<EOT);
+Content-Type: multipart/mixed; boundary=xYzZY
+
+--xYzZY<CR>
+<CR>
+<CR>
+--xYzZY<CR>
+A: 1<CR>
+<CR>
+foo<CR>
+--xYzZY<CR>
+<CR>
+bar
+<CR>
+--xYzZY--<CR>
+EOT
+
+$m2 = HTTP::Message->new;
+$m2->parts($m);
+
+$str = $m2->as_string;
+$str =~ s/\r/<CR>/g;
+ok($str =~ /boundary=(\S+)/);
+
+
+ok($str, <<EOT);
+Content-Type: multipart/mixed; boundary=$1
+
+--$1<CR>
+Content-Type: multipart/mixed; boundary=xYzZY<CR>
+<CR>
+--xYzZY<CR>
+<CR>
+<CR>
+--xYzZY<CR>
+A: 1<CR>
+<CR>
+foo<CR>
+--xYzZY<CR>
+<CR>
+bar
+<CR>
+--xYzZY--<CR>
+<CR>
+--$1--<CR>
+EOT
+
+@parts = $m2->parts;
+ok(@parts, 1);
+
+@parts = $parts[0]->parts;
+ok(@parts, 3);
+ok($parts[1]->header("A"), 1);
+
+$m2->parts([HTTP::Message->new]);
+@parts = $m2->parts;
+ok(@parts, 1);
+
+$m2->parts([]);
+@parts = $m2->parts;
+ok(@parts, 0);
+
+$m->clear;
+$m2->clear;
+
+$m = HTTP::Message->new([content_type => "message/http; boundary=aaa",
+                        ],
+                        <<EOT);
+GET / HTTP/1.1
+Host: www.example.com:8008
+
+EOT
+
+@parts = $m->parts;
+ok(@parts, 1);
+$m2 = $parts[0];
+ok(ref($m2), "HTTP::Request");
+ok($m2->method, "GET");
+ok($m2->uri, "/");
+ok($m2->protocol, "HTTP/1.1");
+ok($m2->header("Host"), "www.example.com:8008");
+ok($m2->content, "");
+
+$m->content(<<EOT);
+HTTP/1.0 200 OK
+Content-Type: text/plain
+
+Hello
+EOT
+
+$m2 = $m->parts;
+ok(ref($m2), "HTTP::Response");
+ok($m2->protocol, "HTTP/1.0");
+ok($m2->code, "200");
+ok($m2->message, "OK");
+ok($m2->content_type, "text/plain");
+ok($m2->content, "Hello\n");
+
+eval { $m->parts(HTTP::Message->new, HTTP::Message->new) };
+ok($@);
+
+$m->add_part(HTTP::Message->new([a=>[1..3]], "a"));
+$str = $m->as_string;
+$str =~ s/\r/<CR>/g;
+ok($str, <<EOT);
+Content-Type: multipart/mixed; boundary=xYzZY
+
+--xYzZY<CR>
+Content-Type: message/http; boundary=aaa<CR>
+<CR>
+HTTP/1.0 200 OK
+Content-Type: text/plain
+
+Hello
+<CR>
+--xYzZY<CR>
+A: 1<CR>
+A: 2<CR>
+A: 3<CR>
+<CR>
+a<CR>
+--xYzZY--<CR>
+EOT
+
+$m->add_part(HTTP::Message->new([b=>[1..3]], "b"));
+
+$str = $m->as_string;
+$str =~ s/\r/<CR>/g;
+ok($str, <<EOT);
+Content-Type: multipart/mixed; boundary=xYzZY
+
+--xYzZY<CR>
+Content-Type: message/http; boundary=aaa<CR>
+<CR>
+HTTP/1.0 200 OK
+Content-Type: text/plain
+
+Hello
+<CR>
+--xYzZY<CR>
+A: 1<CR>
+A: 2<CR>
+A: 3<CR>
+<CR>
+a<CR>
+--xYzZY<CR>
+B: 1<CR>
+B: 2<CR>
+B: 3<CR>
+<CR>
+b<CR>
+--xYzZY--<CR>
 EOT

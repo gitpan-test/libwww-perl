@@ -1,10 +1,10 @@
 package HTTP::Message;
 
-# $Id: Message.pm,v 1.40 2004/04/07 10:44:47 gisle Exp $
+# $Id: Message.pm,v 1.42 2004/04/09 15:07:04 gisle Exp $
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.40 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.42 $ =~ /(\d+)\.(\d+)/);
 
 require HTTP::Headers;
 require Carp;
@@ -465,7 +465,7 @@ Returns the message formatted as a single string.
 The optional $eol parameter specifies the line ending sequence to use.
 The default is "\n".  If no $eol is given then as_string will ensure
 that the returned string is newline terminated (even when the message
-content is not).  No extra newline is appened ff an explicit $eol is
+content is not).  No extra newline is appended if an explicit $eol is
 passed.
 
 =back
@@ -480,6 +480,7 @@ details of these methods:
     $mess->init_header( $field => $val )
     $mess->remove_header( $field )
     $mess->remove_content_headers
+    $mess->header_field_names
     $mess->scan( \&doit )
 
     $mess->date

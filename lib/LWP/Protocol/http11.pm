@@ -1,4 +1,4 @@
-# $Id: http11.pm,v 1.3 2001/04/10 07:12:37 gisle Exp $
+# $Id: http11.pm,v 1.8 2001/04/19 05:39:43 gisle Exp $
 #
 # You can tell LWP to use this module for 'http' requests by running
 # code like this before you make requests:
@@ -20,6 +20,8 @@ use vars qw(@ISA @EXTRA_SOCK_OPTS);
 require LWP::Protocol;
 @ISA = qw(LWP::Protocol);
 
+my $CRLF = "\015\012";
+
 {
     package LWP::Protocol::MyHTTP;
     use vars qw(@ISA);
@@ -28,26 +30,41 @@ require LWP::Protocol;
     sub xread {
 	my $self = shift;
 	if (my $timeout = ${*$self}{io_socket_timeout}) {
-	    my $iosel = (${*$self}{myhttp_io_sel} ||=
-			 do {
-			     require IO::Select;
-			     IO::Select->new($self);
-			 });
-	    die "read timeout" unless $iosel->can_read($timeout);
+	    my $io_sel = (${*$self}{myhttp_io_sel} ||= $self->io_sel);
+	    die "read timeout" unless $io_sel->can_read($timeout);
 	}
 	sysread($self, $_[0], $_[1], $_[2] || 0);
+    }
+
+    sub io_sel {
+	my $self = shift;
+	my $io_sel = (${*$self}{myhttp_io_sel} ||=
+		      do {
+			  require IO::Select;
+			  IO::Select->new($self);
+		      });
+	return $io_sel;
     }
 }
 
 sub _new_socket
 {
     my($self, $host, $port, $timeout) = @_;
+    if (my $sock = delete $self->{ua}{c_cache}{http}{"$host:$port"}) {
+	my $io_sel = $sock->io_sel;
+	return $sock unless $sock->io_sel->can_read(0);
+	# if the socket is readable, then either the peer has closed the
+	# connection or there are some garbage bytes on it.  In either
+	# case we abandon it.
+	$sock->close;
+    }
 
     local($^W) = 0;  # IO::Socket::INET can be noisy
     my $sock = LWP::Protocol::MyHTTP->new(PeerAddr => $host,
 					  PeerPort => $port,
 					  Proto    => 'tcp',
 					  Timeout  => $timeout,
+					  KeepAlive => 1,
 					  $self->_extra_sock_opts($host, $port),
 					 );
     unless ($sock) {
@@ -55,6 +72,7 @@ sub _new_socket
 	$@ =~ s/^.*?: //;
 	die "Can't connect to $host:$port ($@)";
     }
+    $sock->blocking(0);
     $sock;
 }
 
@@ -71,9 +89,9 @@ sub _check_sock
 sub _get_sock_info
 {
     my($self, $res, $sock) = @_;
-    if (defined(my $peerhost = $sock->peerhost)) {
-	$res->header("Client-Peer" => "$peerhost:" . $sock->peerport);
-    }
+    #if (defined(my $peerhost = $sock->peerhost)) {
+    #    $res->header("Client-Peer" => "$peerhost:" . $sock->peerport);
+    #}
 }
 
 sub _fixup_header
@@ -106,6 +124,14 @@ sub _fixup_header
     }
 }
 
+sub hlist_remove {
+    my($hlist, $k) = @_;
+    $k = lc $k;
+    for (my $i = @$hlist - 2; $i >= 0; $i -= 2) {
+	next unless lc($hlist->[$i]) eq $k;
+	splice(@$hlist, $i, 2);
+    }
+}
 
 sub request
 {
@@ -146,15 +172,94 @@ sub request
     $self->_check_sock($request, $socket);
 
     my @h;
-    $request->scan(sub { push(@h, @_); });
+    my $request_headers = $request->headers;
+    $request_headers->scan(sub { push(@h, @_); });
 
-    # XXX need to support sub-ref content and watch out for write timeouts
-    $socket->write_request($method, $fullpath, @h, $request->content);
+    my $content_ref = $request->content_ref;
+    $content_ref = $$content_ref if ref($$content_ref);
+    my $chunked;
+    my $has_content;
 
-    my($version, $code, $mess, @h) = $socket->read_response_headers;
+    if (ref($content_ref) eq 'CODE') {
+	my $clen = $request_headers->header('Content-Length');
+	$has_content++ if $clen;
+	unless (defined $clen) {
+	    push(@h, "Transfer-Encoding" => "chunked");
+	    $chunked++;
+	}
+    } else {
+	# Set (or override) Content-Length header
+	my $clen = $request_headers->header('Content-Length');
+	if (defined($$content_ref) && length($$content_ref)) {
+	    $has_content++;
+	    if (!defined($clen) || $clen ne length($$content_ref)) {
+		if (defined $clen) {
+		    warn "Content-Length header value was wrong, fixed";
+		    hlist_remove(\@h, 'Content-Length');
+		}
+		push(@h, 'Content-Length' => length($$content_ref));
+	    }
+	}
+	elsif ($clen) {
+	    warn "Content-Length set when there is not content, fixed";
+	    hlist_remove(\@h, 'Content-Length');
+	}
+    }
+
+    my $req_buf = $socket->format_request($method, $fullpath, @h);
+
+    # XXX need to watch out for write timeouts
+    {
+	my $n = $socket->syswrite($req_buf, length($req_buf));
+	die $! unless defined($n);
+	die "short write" unless $n == length($req_buf);
+	#LWP::Debug::conns($req_buf);
+    }
+
+    if ($has_content) {
+	# push out content
+	# XXX watch for 100 Continue (or failure) while sending body.
+	# XXX if request contained a 'Expect: 100-continue'-header, then
+	# XXX we should postpone start sending the body for a while.
+	if (ref($content_ref) eq 'CODE') {
+	    my $buf;
+	    while ( ($buf = &$content_ref()), defined($buf) && length($buf)) {
+		#die "write timeout" if $timeout && !$sel->can_write($timeout);
+		$buf = sprintf "%x%s%s%s", length($buf), $CRLF, $buf, $CRLF
+		    if $chunked;
+		my $n = $socket->syswrite($buf, length($buf));
+		die $! unless defined($n);
+		die "short write" unless $n == length($buf);
+		#LWP::Debug::conns($buf);
+	    }
+	    if ($chunked) {
+		# output end marker
+		$buf = "0$CRLF$CRLF";
+		my $n = $socket->syswrite($buf, length($buf));
+		die $! unless defined($n);
+		die "short write" unless $n == length($buf);
+		#LWP::Debug::conns($buf);
+	    }
+	}
+	else {
+	    # $$content_ref must be non-empty
+	    #die "write timeout" if $timeout && !$sel->can_write($timeout);
+	    my $n = $socket->syswrite($$content_ref, length($$content_ref));
+	    die $! unless defined($n);
+	    die "short write ($n/@{[length($$content_ref)]})" unless $n == length($$content_ref);
+	    #LWP::Debug::conns($$cont_ref);
+	}
+    }
+
+    my($code, $mess, @h) = $socket->read_response_headers;
+    if ($code eq "100") {
+	# do it once more
+	($code, $mess, @h) = $socket->read_response_headers;
+    }
 
     my $response = HTTP::Response->new($code, $mess);
-    $response->protocol("HTTP/$version");
+    my $peer_http_version = $socket->peer_http_version;
+    $response->protocol("HTTP/$peer_http_version");
     while (@h) {
 	my($k, $v) = splice(@h, 0, 2);
 	$response->push_header($k, $v);
@@ -181,6 +286,16 @@ sub request
     while (@h) {
 	my($k, $v) = splice(@h, 0, 2);
 	$response->push_header($k, $v);
+    }
+
+    # keep-alive support
+    my %connection = map { (lc($_) => 1) }
+	             split(/\s*,\s*/, $response->header("Connection"));
+    if (($peer_http_version eq "1.1" && !$connection{close}) ||
+	$connection{"keep-alive"})
+    {
+	LWP::Debug::debug("Keep the http connection to $host:$port");
+	$self->{ua}{c_cache}{http}{"$host:$port"} = $socket;
     }
 
     $response;

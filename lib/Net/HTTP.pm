@@ -1,11 +1,13 @@
 package Net::HTTP;
 
-# $Id: HTTP.pm,v 1.12 2001/04/10 06:50:09 gisle Exp $
+# $Id: HTTP.pm,v 1.20 2001/04/19 05:43:52 gisle Exp $
+
+require 5.005;
 
 use strict;
 use vars qw($VERSION @ISA);
 
-$VERSION = "0.01";
+$VERSION = "0.02";
 require IO::Socket::INET;
 @ISA=qw(IO::Socket::INET);
 
@@ -32,7 +34,10 @@ sub configure {
 
     my $sock = $self->SUPER::configure($cnf);
     if ($sock) {
-	$host .= ":" . $sock->peerport unless $host =~ /:/;
+	unless ($host =~ /:/) {
+	    my $p = $sock->peerport;
+	    $host .= ":$p"; # if $p != 80;
+	}
 	$sock->host($host);
 	$sock->keep_alive($keep_alive);
 	$sock->http_version($http_version);
@@ -74,12 +79,13 @@ sub http_version {
 
 sub peer_http_version {
     my $self = shift;
-    my $old = ${*$self}{'peer_http_version'};
-    ${*$self}{'peer_http_version'} = shift if @_;
+    my $old = ${*$self}{'http_peer_version'};
+    ${*$self}{'http_peer_version'} = shift if @_;
     $old;
 }
 
-sub write_request {
+
+sub format_request {
     my $self = shift;
     my $method = shift;
     my $uri = shift;
@@ -92,51 +98,52 @@ sub write_request {
     }
 
     push(@{${*$self}{'http_request_method'}}, $method);
-
     my $ver = ${*$self}{'http_version'};
-    $self->autoflush(0);
+    my $peer_ver = ${*$self}{'http_peer_version'} || "1.0";
 
-    my $peer_ver = ${*$self}{'peer_http_version'} || "1.0";
-
-    print $self "$method $uri HTTP/$ver$CRLF";
-
-    my %given = (host => 0,
-		 "content-length" => 0,
-		 "connection" => 0,
-		);
+    my @h;
+    my @connection;
+    my %given = (host => 0, "content-length" => 0);
     while (@_) {
 	my($k, $v) = splice(@_, 0, 2);
 	my $lc_k = lc($k);
+	if ($lc_k eq "connection") {
+	    push(@connection, split(/\s*,\s*/, $v));
+	    next;
+	}
 	if (exists $given{$lc_k}) {
 	    $given{$lc_k}++;
 	}
-	print $self "$k: $v$CRLF";
+	push(@h, "$k: $v");
     }
 
     if (length($content) && !$given{'content-length'}) {
-	print $self "Content-length: " . length($content) . $CRLF;
+	push(@h, "Content-Length: " . length($content));
     }
 
-    unless ($given{'connection'}) {
+    my @h2;
+    unless (grep lc($_) eq "close", @connection) {
 	if ($self->keep_alive) {
 	    if ($peer_ver eq "1.0") {
-		# XXX from looking at Netscape's headers
-		print $self "Keep-Alive: 300$CRLF";
-		print $self "Connection: Keep-Alive$CRLF";
+		# from looking at Netscape's headers
+		push(@h2, "Keep-Alive: 300");
+		push(@connection, "Keep-Alive");
 	    }
 	}
 	else {
-	    print $self "Connection: close$CRLF" if $ver ge "1.1";
+	    push(@connection, "close") if $ver ge "1.1";
 	}
     }
+    push(@h2, "Connection: " . join(", ", @connection)) if @connection;
+    push(@h2, "Host: ${*$self}{'http_host'}")unless $given{host};
 
-    print $self "Host: ${*$self}{'http_host'}$CRLF"
-	unless $given{host};
+    return join($CRLF, "$method $uri HTTP/$ver", @h2, @h, "", $content);
+}
 
-    print $self $CRLF;
-    $self->autoflush(1);
 
-    print $self $content;
+sub write_request {
+    my $self = shift;
+    print $self $self->format_request(@_);
 }
 
 
@@ -179,6 +186,28 @@ sub my_readline {
 	return $line;
     }
 }
+
+
+sub _rbuf {
+    my $self = shift;
+    if (@_) {
+	for (${*$self}{'http_buf'}) {
+	    my $old;
+	    $old = $_ if defined wantarray;
+	    $_ = shift;
+	    return $old;
+	}
+    }
+    else {
+	return ${*$self}{'http_buf'};
+    }
+}
+
+sub _rbuf_length {
+    my $self = shift;
+    return length ${*$self}{'http_buf'};
+}
+
 
 sub read_header_lines {
     my $self = shift;
@@ -224,7 +253,7 @@ sub read_response_headers {
     ${*$self}{'http_content_length'} = $content_length;
     ${*$self}{'http_first_body'}++;
     delete ${*$self}{'http_trailers'};
-    ($peer_ver, $code, $message, @headers);
+    return ($code, $message, @headers);
 }
 
 
@@ -308,3 +337,141 @@ sub get_trailers {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+Net::HTTP - Low-level HTTP client connection
+
+=head1 NOTE
+
+This module is experimental.  Details of its interface is likely to
+change in the future.
+
+=head1 SYNOPSIS
+
+ use Net::HTTP;
+ my $s = Net::HTTP->new(Host => "www.perl.com) || die $@;
+ $s->write_request(GET => "/", 'User-Agent' => "Mozilla/5.0");
+ my($code, $mess, %h) = $s->read_response_headers;
+
+ while (1) {
+    my $buf;
+    my $n = $s->read_entity_body($buf, 1024);
+    last unless $n;
+    print $buf;
+ }
+
+=head1 DESCRIPTION
+
+The C<Net::HTTP> class is a low-level HTTP client.  An instance of the
+C<Net::HTTP> class represents a connection to an HTTP server.  The
+HTTP protocol is described in RFC 2616.
+
+C<Net::HTTP> is a sub-class of C<IO::Socket::INET>.  You can mix the
+methods described below with reading and writing from the socket
+directly.
+
+The follwing methods are provided (in addition to those of
+C<IO::Socket::INET>):
+
+=over
+
+=item $s = Net::HTTP->new( %options )
+
+The C<Net::HTTP> constructor takes the same options as
+C<IO::Socket::INET> as well as these:
+
+  Host:            Initial host attribute value
+  KeepAlive:       Initial keep_alive attribute value
+  HTTPVersion:     Initial http_version attribute value
+  PeerHTTPVersion: Initial peer_http_version attribute value
+
+=item $s->host
+
+Get/set the default value of the C<Host> header to send.
+
+=item $s->keep_alive
+
+Get/set the I<keep-alive> value.  If this value is TRUE then the
+request will sendt with headers indicating that the server should try
+to keep the connection open.
+
+=item $s->http_version
+
+Get/set the HTTP version number that this client should announce.
+This value can only be set to "1.0" or "1.1".  The default is "1.1".
+
+=item $s->peer_http_version
+
+Get/set the protocol version number of our peer.  This value will
+initially be "1.0", but will be updated by a successful
+read_response_headers() method call.  The value of this header
+influence what headers are added to the request on I<keep-alive>.
+
+=item $s->format_request($method, $uri, %headers, [$content])
+
+Format a request message and return it as a string.  If the headers do
+not include a C<Host> header, then a header is inserted with the value
+of the C<host> attribute.  Headers like C<Connection> and
+C<Keep-Alive> might also be added depending on the I<keep-alive>
+status.
+
+If $content is given (and it is non-empty), then a C<Content-Length>
+header is automatically added unless it was already present.
+
+=item $s->write_request($method, $uri, %headers, [$content])
+
+Format and send a request message.  Arguments are the same as for
+format_request().  Returns true if successful.
+
+=item ($code, $mess, %headers) = $s->read_response_headers
+
+Read response headers from server.
+
+=item $n = $s->read_entity_body($buf, $size);
+
+Reads chunks of the entity body content.  Basically the same interface
+as for read() and sysread(), but buffer offset is not supported yet.
+
+=item %headers = $s->get_trailers
+
+After read_entity_body() has returned 0 to indicate end of the entity
+body, you might call this method to pick up any trailers.
+
+=item $s->_rbuf
+
+Get/set the read buffer content.  The read_response_headers() and
+read_entity_body() methods use an internal buffer which they will look
+for data before they actually sysread more from the socket itself.  If
+they read too much, the remaining data will be left in this buffer.
+
+=item $s->_rbuf_length
+
+Returns the number of bytes in the read buffer.
+
+=back
+
+=head1 SUBCLASSING
+
+The read_response_headers() and read_entity_body() will invoke the
+method xread() when they need more data.  This method takes the same
+arguments as sysread() and the is in fact implemented as a call to
+sysread().  Subclasses might want to override this method to contol
+how reading takes place.
+
+The object itself is a glob.
+
+=head1 SEE ALSO
+
+L<LWP>, L<IO::Socket::INET>, L<Net::HTTP::NB>
+
+=head1 COPYRIGHT
+
+Copyright 2001 Gisle Aas.
+
+This library is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=cut

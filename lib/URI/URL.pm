@@ -1,6 +1,6 @@
 package URI::URL;
 
-$VERSION = "4.05";   # $Date: 1996/07/17 09:11:42 $
+$VERSION = "4.06";   # $Date: 1996/09/26 14:51:08 $
 sub Version { $VERSION; }
 
 require 5.002;
@@ -235,6 +235,7 @@ sub strict;
 sub base;
 sub scheme;
 sub abs;
+sub rel;
 sub as_string;
 sub eq;
 sub print_on;
@@ -301,11 +302,10 @@ sub scheme {
     $old;
 }
 
-# This is overridden by _generic (this is just a noop for those schemes that
+# These are overridden by _generic (this is just a noop for those schemes that
 # do not wish to be a subclass of URI::URL::_generic)
-sub abs {
-    shift->clone;
-}
+sub abs { shift->clone; }
+sub rel { shift->clone; }
 
 # This method should always be overridden in subclasses
 sub as_string {
@@ -630,8 +630,10 @@ that this should be avoided, but you can enable this old behaviour by
 passing a TRUE value as the second argument to the abs() method.  The
 difference is demonstrated by the following examples:
 
-  url("http:foo")->base("http://host/a/b")     ==>  "http:foo"
-  url("http:foo")->base("http://host/a/b", 1)  ==>  "http:/host/a/foo"
+  url("http:foo")->abs("http://host/a/b")     ==>  "http:foo"
+  url("http:foo")->abs("http://host/a/b", 1)  ==>  "http:/host/a/foo"
+
+The rel() method will do the opposite transformation.
 
 =item $url->as_string
 
@@ -716,6 +718,21 @@ therefore encoded as '%2E'.
 
 Get/set the network port (unescaped)
 
+=item $url->rel([$base])
+
+Return a relative URL if possible.  This is the opposite of what the
+abs() method does.  For instance:
+
+   url("http://www.math.uio.no/doc/mail/top.html",
+       "http://www.math.uio.no/doc/linux/")->rel
+
+will return a relative URL with path set to "../mail/top.html" and
+with the same base as the original URL.
+
+If the original URL already is relative or the scheme or netloc does
+not match the base, then a copy of the original URL is returned.
+
+
 =item $url->print_on(*FILEHANDLE);
 
 Prints a verbose presentation of the contents of the URL object to
@@ -766,7 +783,14 @@ if the key is repeated (which it is allowed to do).
 
 This method can also be used to set the query sting of the URL like this:
 
-  $url->query_form(foo => 'bar', equal => '=');
+  $url->query_form(foo => 'bar', foo => 'baz', equal => '=');
+
+If the value part of a key/value pair is a reference to an array, then
+it will be converted to separate key/value pairs for each value.  This
+means that these two calls are equal:
+
+  $url->query_form(foo => 'bar', foo => 'baz');
+  $url->query_form(foo => ['bar', 'baz']);
 
 =back
 

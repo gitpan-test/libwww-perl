@@ -1,4 +1,4 @@
-# $Id: RobotUA.pm,v 1.4 1996/04/09 15:44:29 aas Exp $
+# $Id: RobotUA.pm,v 1.9 1996/09/30 11:45:36 aas Exp $
 
 package LWP::RobotUA;
 
@@ -13,6 +13,7 @@ use Carp ();
 use LWP::Debug ();
 use HTTP::Status ();
 use HTTP::Date qw(time2str);
+use strict;
 
 =head1 NAME
 
@@ -31,20 +32,16 @@ LWP::RobotUA - A class for Web Robots
 
 This class implements a user agent that is suitable for robot
 applications.  Robots should be nice to the servers they visit.  They
-should consult the /robots.txt file to ensure that they are welcomed
+should consult the F<robots.txt> file to ensure that they are welcomed
 and they should not send too frequent requests.
 
 But, before you consider writing a robot take a look at
 <URL:http://info.webcrawler.com/mak/projects/robots/robots.html>.
 
-When you use a LWP::RobotUA as your user agent, then you do not really
-have to think about these things yourself.  Just send requests as you
-do when you are using a normal LWP::UserAgent and this special agent
-will make sure you are nice.
-
-=head1 SEE ALSO
-
-L<LWP::UserAgent>
+When you use a I<LWP::RobotUA> as your user agent, then you do not
+really have to think about these things yourself.  Just send requests
+as you do when you are using a normal I<LWP::UserAgent> and this
+special agent will make sure you are nice.
 
 =head1 METHODS
 
@@ -64,28 +61,23 @@ In addition these methods are provided:
 # $self->{'delay'}    Required delay between request to the same
 #                     server in minutes.
 #
-# $self->{'visited'}   An hash where the keys are server names and the
-#                      value is a hash with these values:
-#                          'last'   last fetch time
-#                          'count'  number of documents fetched
-#
 # $self->{'rules'}     A WWW::RobotRules object
 #
 
-=head2 $ua = LWP::RobotUA->new($agent_name, $from)
 
-A name and the mail address of the human running the the robot is
-required by the constructor.  The name can be changed later though the
-agent() method.  The mail address chan be changed with the from()
-method.
+=head2 $ua = LWP::RobotUA->new($agent_name, $from, [$rules])
+
+Your robot's name and the mail address of the human responsible for
+the robot (i.e. you) is required by the constructor.
+
+Optionally it allows you to specify the I<WWW::RobotRules> object to
+use.
 
 =cut
 
 sub new
 {
-    my $class = shift;
-    my $name  = shift;
-    my $from  = shift;
+    my($class,$name,$from,$rules) = @_;
 
     Carp::croak('LWP::RobotUA name required') unless $name;
     Carp::croak('LWP::RobotUA from address required') unless $from;
@@ -97,11 +89,16 @@ sub new
     $self->{'agent'} = $name;
     $self->{'from'}  = $from;
 
-    $self->{'rules'} = new WWW::RobotRules $name;
-    $self->{'visited'} = { };
+    if ($rules) {
+	$rules->agent($name);
+	$self->{'rules'} = $rules;
+    } else {
+	$self->{'rules'} = new WWW::RobotRules $name;
+    }
 
     $self;
 }
+
 
 =head2 $ua->delay([$minutes])
 
@@ -112,35 +109,49 @@ default is 1 minute.
 
 sub delay { shift->_elem('delay', @_); }
 
+
 sub agent
 {
     my $self = shift;
     my $old = $self->SUPER::agent(@_);
     if (@_) {
 	# Changing our name means to start fresh
-	$self->{'rules'} = new WWW::RobotRules $self->{'agent'};
-	$self->{'visited'} = {};
+	$self->{'rules'}->agent($self->{'agent'}); 
     }
     $old;
 }
 
-=head2 $ua->host_count($hostname)
+
+=head2 $ua->rules([$rules])
+
+Set/get which I<WWW::RobotRules> object to use. 
+
+=cut
+
+sub rules {
+    my $self = shift;
+    my $old = $self->_elem('rules', @_);
+    $self->{'rules'}->agent($self->{'agent'}) if @_;
+    $old;
+}
+
+
+=head2 $ua->no_visits($netloc)
 
 Returns the number of documents fetched from this server host.
 
 =cut
 
-sub host_count
+sub no_visits
 {
-    my($self, $host) = @_;
-    return undef unless defined $host;
-    if ($self->{'visited'}{$host}) {
-	return $self->{'visited'}{$host}{'count'};
-    }
-    return undef;
+    my($self, $netloc) = @_;
+    $self->{'rules'}->no_visits($netloc);
 }
 
-=head2 $ua->host_wait($hostname)
+*host_count = \&no_visits;  # backwards compatibility with LWP-5.02
+
+
+=head2 $ua->host_wait($netloc)
 
 Returns the number of seconds you must wait before you can make a new
 request to this host.
@@ -149,16 +160,17 @@ request to this host.
 
 sub host_wait
 {
-    my($self, $host) = @_;
-    return undef unless defined $host;
-    if ($self->{'visited'}{$host}) {
-	my $wait = int($self->{'delay'} * 60 -
-		       (time - $self->{'visited'}{$host}{'last'}));
+    my($self, $netloc) = @_;
+    return undef unless defined $netloc;
+    my $last = $self->{'rules'}->last_visit($netloc);
+    if ($last) {
+	my $wait = int($self->{'delay'} * 60 - (time - $last));
 	$wait = 0 if $wait < 0;
 	return $wait;
     }
     return 0;
 }
+
 
 sub simple_request
 {
@@ -166,37 +178,45 @@ sub simple_request
 
     LWP::Debug::trace('()');
 
-    my $host = $request->url->host;
-
     # Do we try to access a new server?
-    unless ($self->{'visited'}{$host}) {
-	LWP::Debug::debug("Host $host is not visited before.");
-	$self->{'visited'}{$host}{'count'} = 0;  # avoids infinite recursion
-	$self->{'visited'}{$host}{'last'}  = 0;
+    my $allowed = $self->{'rules'}->allowed($request->url);
+
+    if ($allowed < 0) {
+	LWP::Debug::debug("Host is not visited before, or robots.txt expired.");
 	# fetch "robots.txt"
 	my $robot_url = $request->url->clone;
 	$robot_url->path("robots.txt");
 	$robot_url->params(undef);
 	$robot_url->query(undef);
 	LWP::Debug::debug("Requesting $robot_url");
+
+	# make access to robot.txt legal since this will be a recursive call
+	$self->{'rules'}->parse($robot_url, ""); 
+
 	my $robot_req = new HTTP::Request 'GET', $robot_url;
-	# This will be a recursive call
 	my $robot_res = $self->request($robot_req);
+	my $fresh_until = $robot_res->fresh_until;
 	if ($robot_res->is_success) {
 	    LWP::Debug::debug("Parsing robot rules");
-	    $self->{'rules'}->parse($robot_url, $robot_res->content);
+	    $self->{'rules'}->parse($robot_url, $robot_res->content, 
+				    $fresh_until);
 	} else {
-	    LWP::Debug::debug("No robots.txt file for $host");
+	    LWP::Debug::debug("No robots.txt file found");
+	    $self->{'rules'}->parse($robot_url, "", $fresh_until);
 	}
+
+	# recalculate allowed...
+	$allowed = $self->{'rules'}->allowed($request->url);
     }
 
     # Check rules
-    LWP::Debug::debug("Checking robot rules");
-    unless ($self->{'rules'}->allowed($request->url)) {
+    unless ($allowed) {
 	return new HTTP::Response
 	  &HTTP::Status::RC_FORBIDDEN, 'Forbidden by robots.txt';
     }
-    my $wait = $self->host_wait($host);
+
+    my $netloc = $request->url->netloc;
+    my $wait = $self->host_wait($netloc);
 
     if ($wait) {
 	LWP::Debug::debug("Must wait $wait seconds");
@@ -213,11 +233,11 @@ sub simple_request
     # Perform the request
     my $res = $self->SUPER::simple_request($request, $arg, $size);
 
-    $self->{'visited'}{$host}{'last'} = time;
-    $self->{'visited'}{$host}{'count'}++;
+    $self->{'rules'}->visit($netloc);
 
     $res;
 }
+
 
 =head2 $ua->as_string
 
@@ -234,21 +254,17 @@ sub as_string
     push(@s, "    Minimum delay: " . int($self->{'delay'}*60) . "s");
     push(@s, "    Will sleep if too early") if $self->{'use_alarm'};
     push(@s, "    Rules = $self->{'rules'}");
-    push(@s, "    Visits");
-    for (sort keys %{$self->{'visited'}}) {
-	my $e = $self->{visited}{$_};
-	push(@s, sprintf "      %-20s: " .
-			 localtime($e->{'last'}) . "%4d",
-			 $_, $e->{'count'});
-    }
-
     join("\n", @s, '');
 }
 
 1;
 
+=head1 SEE ALSO
+
+L<LWP::UserAgent>, L<WWW::RobotRules>
+
 =head1 AUTHOR
 
-Gisle Aas <aas@sn.no>
+Gisle Aas E<lt>aas@sn.no>
 
 =cut

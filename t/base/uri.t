@@ -275,15 +275,16 @@ sub parts_test {
 
     # Test the path_components function
     $url = new URI::URL 'file:%2f/%2f';
-    my $p = join('-', $url->path_components);
+    my $p;
+    $p = join('-', $url->path_components);
     die "\$url->path_components returns '$p', expected '/-/'"
       unless $p eq "/-/";
     $url->host("localhost");
-    my $p = join('-', $url->path_components);
+    $p = join('-', $url->path_components);
     die "\$url->path_components returns '$p', expected '-/-/'"
       unless $p eq "-/-/";
     $url->epath("/foo/bar/");
-    my $p = join('-', $url->path_components);
+    $p = join('-', $url->path_components);
     die "\$url->path_components returns '$p', expected '-foo-bar-'"
       unless $p eq "-foo-bar-";
     $url->path_components("", "/etc", "\0", "..", "øse", "");
@@ -321,12 +322,14 @@ sub parts_test {
 
     $url->query_form(a => undef, a => 'foo', '&=' => '&=+');
     $url->_expect('as_string' => 'http://web/?a=&a=foo&%26%3D=%26%3D+');
+
     my @a = $url->query_form;
     die "Wrong length" unless @a == 6;
     die "Bad keys from query_form"
       unless $a[0] eq 'a' && $a[2] eq 'a' && $a[4] eq '&=';
     die "Bad values from query_form"
       unless $a[1] eq '' && $a[3] eq 'foo' && $a[5] eq '&=+';
+
     # calling keywords is an error
     eval { $url->keywords; };
     die "\$url->keywords should croak when query is a form."
@@ -336,6 +339,10 @@ sub parts_test {
     @a = $url->query_form;
     #print join(":", @a), "\n";
     die "Wrong length" unless @a == 8;
+    # Try array ref values in the key value pairs
+    $url->query_form(a => ['foo', 'bar'], b => 'foo', c => ['bar', 'foo']);
+    $url->_expect('as_string', 'http://web/?a=foo&a=bar&b=foo&c=bar&c=foo');
+
 
     netloc_test();
     port_test();
@@ -774,7 +781,7 @@ EOM
     }
 
     # bug found and fixed in 1.9 by "J.E. Fritz" <FRITZ@gems.vcu.edu>
-    my $base = new URI::URL 'http://host/directory/file';
+    $base = new URI::URL 'http://host/directory/file';
     my $relative = new URI::URL 'file', $base;
     my $result = $relative->abs;
 
@@ -786,9 +793,9 @@ EOM
     # be canonicalised, rather than making a simple
     # substitution of the last component.
     # Better doublecheck someone hasn't "fixed this bug" :-)
-    my $base = new URI::URL 'http://host/dir1/../dir2/file';
-    my $relative = new URI::URL 'file', $base;
-    my $result = $relative->abs;
+    $base = new URI::URL 'http://host/dir1/../dir2/file';
+    $relative = new URI::URL 'file', $base;
+    $result = $relative->abs;
     die 'URL not canonicalised' unless $result eq 'http://host/dir2/file';
 
     print "--------\n";
@@ -819,14 +826,39 @@ EOM
 	)
     {
 	my($url, $base, $expected_abs) = @$_;
-	$rel = new URI::URL $url, $base;
+	my $rel = new URI::URL $url, $base;
 	my $abs = $rel->abs($base, 1);
 	printf("  %-12s+  $base  =>  %s\n", $rel, $abs);
-
 	$abs->_expect('as_string', $expected_abs);
     }
-
     print "absolute test ok\n";
+
+    # Test relative function
+    for (
+	 ["http://abc/a",   "http://abc",        "a"],
+	 ["http://abc/a",   "http://abc/b",      "a"],
+	 ["http://abc/a?q", "http://abc/b",      "a?q"],
+	 ["http://abc/a;p", "http://abc/b",      "a;p"],
+	 ["http://abc/a",   "http://abc/a/b/c/", "../../../a"],
+
+	 ["file:/etc/motd", "file:/",            "etc/motd"],
+	 ["file:/etc/motd", "file:/etc/passwd",  "motd"],
+	 ["file:/etc/motd", "file:/etc/rc2.d/",  "../motd"],
+	 ["file:/etc/motd", "file:/usr/lib/doc", "../../etc/motd"],
+
+	 ["mailto:aas",     "http://abc",        "mailto:aas"],
+
+	 # Nicolai Langfeldt's original example
+	 ["http://www.math.uio.no/doc/mail/top.html",
+	  "http://www.math.uio.no/doc/linux/", "../mail/top.html"],
+        )
+    {
+	my($abs, $base, $expect) = @$_;
+	printf "url('$abs', '$base')->rel eq '$expect'\n";
+	my $rel = URI::URL->new($abs, $base)->rel;
+	$rel->_expect('as_string', $expect);
+    }
+    print "relative test ok\n";
 }
 
 

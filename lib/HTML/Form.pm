@@ -1,13 +1,13 @@
 package HTML::Form;
 
-# $Id: Form.pm,v 1.39 2004/04/09 14:17:32 gisle Exp $
+# $Id: Form.pm,v 1.44 2004/06/16 10:06:07 gisle Exp $
 
 use strict;
 use URI;
 use Carp ();
 
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%03d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 1.44 $ =~ /(\d+)\.(\d+)/);
 
 my %form_tags = map {$_ => 1} qw(input textarea button select option);
 
@@ -27,6 +27,8 @@ my %type2class = (
  submit   => "SubmitInput",
  image    => "ImageInput",
  file     => "FileInput",
+
+ keygen   => "KeygenInput",
 );
 
 =head1 NAME
@@ -94,7 +96,7 @@ sub parse
     my $p = HTML::TokeParser->new(ref($html) ? $html->content_ref : \$html);
     eval {
 	# optimization
-	$p->report_tags(qw(form input textarea select optgroup option));
+	$p->report_tags(qw(form input textarea select optgroup option keygen));
     };
 
     unless (defined $base_uri) {
@@ -136,15 +138,26 @@ sub parse
 		    $f->push_input("textarea", $attr);
 		}
 		elsif ($tag eq "select") {
-		    $attr->{select_value} = $attr->{value}
-		        if exists $attr->{value};
+		    # rename attributes reserved to come for the option tag
+		    for ("value", "value_name") {
+			$attr->{"select_$_"} = delete $attr->{$_}
+			    if exists $attr->{$_};
+		    }
 		    while ($t = $p->get_tag) {
 			my $tag = shift @$t;
 			last if $tag eq "/select";
 			next if $tag =~ m,/?optgroup,;
 			next if $tag eq "/option";
 			if ($tag eq "option") {
-			    my %a = (%$attr, %{$t->[0]});
+			    my %a = %{$t->[0]};
+			    # rename keys so they don't clash with %attr
+			    for (keys %a) {
+				next if $_ eq "value";
+				$a{"option_$_"} = delete $a{$_};
+			    }
+			    while (my($k,$v) = each %$attr) {
+				$a{$k} = $v;
+			    }
 			    $a{value_name} = $p->get_trimmed_text;
 			    $a{value} = delete $a{value_name}
 				unless defined $a{value};
@@ -152,8 +165,26 @@ sub parse
 			}
 			else {
 			    Carp::carp("Bad <select> tag '$tag'") if $^W;
+			    if ($tag eq "/form" ||
+				$tag eq "input" ||
+				$tag eq "textarea" ||
+				$tag eq "select" ||
+				$tag eq "keygen")
+			    {
+				# MSIE implictly terminate the <select> here, so we
+				# try to do the same.  Actually the MSIE behaviour
+				# appears really strange:  <input> and <textarea>
+				# do implictly close, but not <select>, <keygen> or
+				# </form>.
+				my $type = ($tag =~ s,^/,,) ? "E" : "S";
+				$p->unget_token([$type, $tag, @$t]);
+				last;
+			    }
 			}
 		    }
+		}
+		elsif ($tag eq "keygen") {
+		    $f->push_input("keygen", $attr);
 		}
 	    }
 	}
@@ -192,6 +223,7 @@ sub push_input
     my @extra;
     push(@extra, readonly => 1) if $type eq "hidden";
 
+    delete $attr->{type}; # don't confuse the type argument
     my $input = $class->new(type => $type, %$attr, @extra);
     $input->add_to_form($self);
 }
@@ -712,7 +744,7 @@ error to try to set it to something else and the method will croak if
 you try.
 
 You will also be able to set the value of read-only inputs, but a
-warning will be generated if running under 'perl -w'.
+warning will be generated if running under C<perl -w>.
 
 =cut
 
@@ -833,25 +865,31 @@ sub dump
     my $dump = "$name=$value";
 
     my $type = $self->type;
-    return $dump if $type eq "text";
 
-    $type = ($type eq "text") ? "" : " ($type)";
-    my $menu = $self->{menu} || "";
-    my $value_names = $self->{value_names};
-    if ($menu) {
-	my @menu;
-	for (0 .. @$menu-1) {
-	    my $opt = $menu->[$_];
-	    $opt = "<UNDEF>" unless defined $opt;
-	    substr($opt,0,0) = "*" if $self->{seen}[$_];
-	    $opt .= "/$value_names->[$_]"
-		if $value_names && defined $value_names->[$_]
-		    && $value_names->[$_] ne $opt;
-	    push(@menu, $opt);
+    $type .= " disabled" if $self->disabled;
+    $type .= " readonly" if $self->readonly;
+    return sprintf "%-30s %s", $dump, "($type)" unless $self->{menu};
+
+    my @menu;
+    my $i = 0;
+    for (@{$self->{menu}}) {
+	my $opt = $_->{value};
+	$opt = "<UNDEF>" unless defined $opt;
+	$opt .= "/$_->{name}"
+	    if defined $_->{name} && length $_->{name} && $_->{name} ne $opt;
+	substr($opt,0,0) = "-" if $_->{disabled};
+	if (exists $self->{current} && $self->{current} == $i) {
+	    substr($opt,0,0) = "!" unless $_->{seen};
+	    substr($opt,0,0) = "*";
 	}
-	$menu = "[" . join("|", @menu) . "]";
+	else {
+	    substr($opt,0,0) = ":" if $_->{seen};
+	}
+	push(@menu, $opt);
+	$i++;
     }
-    sprintf "%-30s %-10s %s", $dump, $type, $menu;
+
+    return sprintf "%-30s %-10s %s", $dump, "($type)", "[" . join("|", @menu) . "]";
 }
 
 
@@ -903,26 +941,31 @@ sub new
 
     my $value = delete $self->{value};
     my $value_name = delete $self->{value_name};
-    
-    if ($self->type eq "checkbox") {
+    my $type = $self->{type};
+
+    if ($type eq "checkbox") {
 	$value = "on" unless defined $value;
-	$self->{menu} = [undef, $value];
-	$self->{value_names} = ["off", $value_name];
-	$self->{current} = (exists $self->{checked}) ? 1 : 0;
-	delete $self->{checked};
+	$self->{menu} = [
+	    { value => undef, name => "off", },
+            { value => $value, name => $value_name, },
+        ];
+	$self->{current} = (delete $self->{checked}) ? 1 : 0;
+	;
     }
     else {
-	$self->{menu} = [$value];
-	my $checked = exists $self->{checked} || exists $self->{selected};
+	$self->{option_disabled}++
+	    if $type eq "radio" && delete $self->{disabled};
+	$self->{menu} = [
+            {value => $value, name => $value_name},
+        ];
+	my $checked = $self->{checked} || $self->{option_selected};
 	delete $self->{checked};
-	delete $self->{selected};
+	delete $self->{option_selected};
 	if (exists $self->{multiple}) {
-	    unshift(@{$self->{menu}}, undef);
-	    $self->{value_names} = ["off", $value_name];
+	    unshift(@{$self->{menu}}, { value => undef, name => "off"});
 	    $self->{current} = $checked ? 1 : 0;
 	}
 	else {
-	    $self->{value_names} = [$value_name];
 	    $self->{current} = 0 if $checked;
 	}
     }
@@ -933,17 +976,25 @@ sub add_to_form
 {
     my($self, $form) = @_;
     my $type = $self->type;
+
     return $self->SUPER::add_to_form($form)
-	if $type eq "checkbox" ||
-	   ($type eq "option" && exists $self->{multiple});
+	if $type eq "checkbox";
+
+    if ($type eq "option" && $self->{multiple}) {
+	$self->{disabled} ||= $self->{option_disabled};
+	return $self->SUPER::add_to_form($form);
+    }
+
+    die "Assert" if @{$self->{menu}} != 1;
+    my $m = $self->{menu}[0];
+    $m->{disabled}++ if $self->{option_disabled};
 
     my $prev = $form->find_input($self->{name}, $self->{type});
     return $self->SUPER::add_to_form($form) unless $prev;
 
     # merge menues
-    push(@{$prev->{menu}}, @{$self->{menu}});
-    push(@{$prev->{value_names}}, @{$self->{value_names}});
-    $prev->{current} = @{$prev->{menu}} - 1 if exists $self->{current};
+    $prev->{current} = @{$prev->{menu}} if exists $self->{current};
+    push(@{$prev->{menu}}, $m);
 }
 
 sub fixup
@@ -952,42 +1003,44 @@ sub fixup
     if ($self->{type} eq "option" && !(exists $self->{current})) {
 	$self->{current} = 0;
     }
-    $self->{seen} = [(0) x @{$self->{menu}}];
-    $self->{seen}[$self->{current}] = 1 if exists $self->{current};
+    $self->{menu}[$self->{current}]{seen}++ if exists $self->{current};
 }
 
 sub value
 {
     my $self = shift;
     my $old;
-    $old = $self->{menu}[$self->{current}] if exists $self->{current};
+    $old = $self->{menu}[$self->{current}]{value} if exists $self->{current};
     if (@_) {
 	my $i = 0;
 	my $val = shift;
 	my $cur;
+	my $disabled;
 	for (@{$self->{menu}}) {
-	    if ((defined($val) && defined($_) && $val eq $_) ||
-		(!defined($val) && !defined($_))
+	    if ((defined($val) && defined($_->{value}) && $val eq $_->{value}) ||
+		(!defined($val) && !defined($_->{value}))
 	       )
 	    {
 		$cur = $i;
-		last;
+		$disabled = $_->{disabled};
+		last unless $disabled;
 	    }
 	    $i++;
 	}
-	unless (defined $cur) {
+	if (!(defined $cur) || $disabled) {
 	    if (defined $val) {
 		# try to search among the alternative names as well
 		my $i = 0;
 		my $cur_ignorecase;
 		my $lc_val = lc($val);
-		for (@{$self->{value_names}}) {
-		    if (defined $_) {
-			if ($val eq $_) {
+		for (@{$self->{menu}}) {
+		    if (defined $_->{name}) {
+			if ($val eq $_->{name}) {
+			    $disabled = $_->{disabled};
 			    $cur = $i;
-			    last;
+			    last unless $disabled;
 			}
-			if (!defined($cur_ignorecase) && $lc_val eq lc($_)) {
+			if (!defined($cur_ignorecase) && $lc_val eq lc($_->{name})) {
 			    $cur_ignorecase = $i;
 			}
 		    }
@@ -995,7 +1048,10 @@ sub value
 		}
 		unless (defined $cur) {
 		    $cur = $cur_ignorecase;
-		    unless (defined $cur) {
+		    if (defined $cur) {
+			$disabled = $self->{menu}[$cur]{disabled};
+		    }
+		    else {
 			my $n = $self->name;
 		        Carp::croak("Illegal value '$val' for field '$n'");
 		    }
@@ -1006,8 +1062,12 @@ sub value
 	        Carp::croak("The '$n' field can't be unchecked");
 	    }
 	}
+	if ($disabled) {
+	    my $n = $self->name;
+	    Carp::croak("The value '$val' has been disabled for field '$n'");
+	}
 	$self->{current} = $cur;
-	$self->{seen}[$cur] = 1;
+	$self->{menu}[$cur]{seen}++;
     }
     $old;
 }
@@ -1033,29 +1093,27 @@ sub check
 {
     my $self = shift;
     $self->{current} = 1;
-    $self->{seen}[1] = 1;
+    $self->{menu}[1]{seen}++;
 }
 
 sub possible_values
 {
     my $self = shift;
-    @{$self->{menu}};
+    map $_->{value}, @{$self->{menu}};
 }
 
 sub other_possible_values
 {
     my $self = shift;
-    map { $self->{menu}[$_] }
-        grep {!$self->{seen}[$_]}
-             0 .. (@{$self->{seen}} - 1);
+    map $_->{value}, grep !$_->{seen}, @{$self->{menu}};
 }
 
 sub value_names {
     my $self = shift;
     my @names;
-    for my $i (0 .. @{$self->{menu}} - 1) {
-	my $n = $self->{value_names}[$i];
-	$n = $self->{menu}[$i] unless defined $n;
+    for (@{$self->{menu}}) {
+	my $n = $_->{name};
+	$n = $_->{value} unless defined $n;
 	push(@names, $n);
     }
     @names;
@@ -1216,6 +1274,19 @@ sub form_name_value {
     }
 
     return ($name => [$file, $filename, @headers]);
+}
+
+package HTML::Form::KeygenInput;
+@HTML::Form::KeygenInput::ISA=qw(HTML::Form::Input);
+
+sub challenge {
+    my $self = shift;
+    return $self->{challenge};
+}
+
+sub keytype {
+    my $self = shift;
+    return lc($self->{keytype} || 'rsa');
 }
 
 1;

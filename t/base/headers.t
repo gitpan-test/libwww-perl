@@ -3,7 +3,7 @@
 use strict;
 use Test qw(plan ok);
 
-plan tests => 149;
+plan tests => 154;
 
 my($h, $h2);
 sub j { join("|", @_) }
@@ -170,15 +170,22 @@ ok($h->header("Date") =~ /^[A-Z][a-z][a-z], \d\d .* GMT$/);
     ok($off == 0 || $off == 1); 
 }
 
+if ($] < 5.006) {
+   Test::skip("Can't call variable method", 1) for 1..13;
+}
+else {
 # other date fields
 for my $field (qw(expires if_modified_since if_unmodified_since
 		  last_modified))
 {
+    eval <<'EOT'; die $@ if $@;
     ok($h->$field, undef);
     ok($h->$field(time), undef);
     ok((time - $h->$field) =~ /^[01]$/);
+EOT
 }
 ok(j($h->header_field_names), "Date|If-Modified-Since|If-Unmodified-Since|Expires|Last-Modified");
+}
 
 $h->clear;
 ok($h->content_type, "");
@@ -396,4 +403,18 @@ ok($c->as_string, <<EOT);
 Content-MD5: dummy
 Content-Type: text/plain
 Content-Foo: foo
+EOT
+
+$h = HTTP::Headers->new;
+$h->content_type("text/plain");
+$h->header(":foo_bar", 1);
+$h->push_header(":content_type", "text/html");
+ok(j($h->header_field_names), "Content-Type|:content_type|:foo_bar");
+ok($h->header('Content-Type'), "text/plain");
+ok($h->header(':Content_Type'), undef);
+ok($h->header(':content_type'), "text/html");
+ok($h->as_string, <<EOT);
+Content-Type: text/plain
+content_type: text/html
+foo_bar: 1
 EOT

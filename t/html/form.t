@@ -3,7 +3,7 @@
 use strict;
 use Test qw(plan ok);
 
-plan tests => 52;
+plan tests => 97;
 
 use HTML::Form;
 
@@ -24,7 +24,7 @@ ok(@f, 2);
 
 my $f = shift @f;
 ok($f->value("name"), "");
-ok($f->dump, "GET http://localhost/abc [foo]\n  name=\n");
+ok($f->dump, "GET http://localhost/abc [foo]\n  name=                          (text)\n");
 
 my $req = $f->click;
 ok($req->method, "GET");
@@ -126,12 +126,11 @@ $f->value(f => $filename);
 
 ok($f->click->as_string, <<"EOT");
 POST http://localhost/
-Content-Length: 159
+Content-Length: 139
 Content-Type: multipart/form-data; boundary=xYzZY
 
 --xYzZY\r
 Content-Disposition: form-data; name="f"; filename="$filename"\r
-Content-Length: 18\r
 Content-Type: text/plain\r
 \r
 This is some text
@@ -266,3 +265,174 @@ $input = $f->find_input("z");
 ok($input->type, "hidden");
 ok($input->readonly);
 ok(!$input->disabled);
+
+$f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<form>
+<textarea name="t" type="hidden">
+<foo>
+</textarea>
+<select name=s value=s>
+ <option name=y>Foo
+ <option name=x value=bar type=x>Bar
+</form>
+EOT
+
+ok($f->value("t"), "\n<foo>\n");
+ok($f->value("s"), "Foo");
+ok(join(":", $f->find_input("s")->possible_values), "Foo:bar");
+ok(join(":", $f->find_input("s")->other_possible_values), "bar");
+ok($f->value("s", "bar"), "Foo");
+ok($f->value("s"), "bar");
+ok(join(":", $f->find_input("s")->other_possible_values), "");
+
+
+$f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<form>
+
+<input type=radio name=r0 value=1 disabled>one
+
+<input type=radio name=r1 value=1 disabled>one
+<input type=radio name=r1 value=2>two
+<input type=radio name=r1 value=3>three
+
+<input type=radio name=r2 value=1>one
+<input type=radio name=r2 value=2 disabled>two
+<input type=radio name=r2 value=3>three
+
+<select name=s0>
+ <option disabled>1
+</select>
+
+<select name=s1>
+ <option disabled>1
+ <option>2
+ <option>3
+</select>
+
+<select name=s2>
+ <option>1
+ <option disabled>2
+ <option>3
+</select>
+
+<select name=s3 disabled>
+ <option>1
+ <option disabled>2
+ <option>3
+</select>
+
+<select name=m0 multiple>
+ <option disabled>1
+</select>
+
+<select name=m1 multiple>
+ <option disabled>1
+ <option>2
+ <option>3
+</select>
+
+<select name=m2 multiple>
+ <option>1
+ <option disabled>2
+ <option>3
+</select>
+
+<select name=m3 disabled multiple>
+ <option>1
+ <option disabled>2
+ <option>3
+</select>
+
+</form>
+
+EOT
+#print $f->dump;
+ok(!$f->find_input("r0")->disabled);
+ok(!eval {$f->value("r0", 1);});
+ok($@ && $@ =~ /^The value '1' has been disabled for field 'r0'/);
+ok(!$f->find_input("r1")->disabled);
+ok($f->value("r1", 2), undef);
+ok($f->value("r1"), 2);
+ok(!eval {$f->value("r1", 1);});
+ok($@ && $@ =~ /^The value '1' has been disabled for field 'r1'/);
+ok(!eval {$f->value("r2", 2);});
+ok($@ && $@ =~ /^The value '2' has been disabled for field 'r2'/);
+ok(!eval {$f->value("r2", "two");});
+ok($@ && $@ =~ /^The value 'two' has been disabled for field 'r2'/);
+
+ok(!$f->find_input("s0")->disabled);
+ok(!$f->find_input("s1")->disabled);
+ok(!$f->find_input("s2")->disabled);
+ok($f->find_input("s3")->disabled);
+
+ok(!eval {$f->value("s1", 1);});
+ok($@ && $@ =~ /^The value '1' has been disabled for field 's1'/);
+
+ok($f->find_input("m0")->disabled);
+ok($f->find_input("m1", undef, 1)->disabled);
+ok(!$f->find_input("m1", undef, 2)->disabled);
+ok(!$f->find_input("m1", undef, 3)->disabled);
+
+ok(!$f->find_input("m2", undef, 1)->disabled);
+ok($f->find_input("m2", undef, 2)->disabled);
+ok(!$f->find_input("m2", undef, 3)->disabled);
+
+ok($f->find_input("m3", undef, 1)->disabled);
+ok($f->find_input("m3", undef, 2)->disabled);
+ok($f->find_input("m3", undef, 3)->disabled);
+
+$f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<!-- from http://www.blooberry.com/indexdot/html/tagpages/k/keygen.htm -->
+<form  METHOD="post" ACTION="http://example.com/secure/keygen/test.cgi" ENCTYPE="application/x-www-form-urlencoded">
+   <keygen NAME="randomkey" CHALLENGE="1234567890">
+   <input TYPE="text" NAME="Field1" VALUE="Default Text">
+</form>
+EOT
+
+ok($f->find_input("randomkey"));
+ok($f->find_input("randomkey")->challenge, "1234567890");
+ok($f->find_input("randomkey")->keytype, "rsa");
+ok($f->click->as_string, <<EOT);
+POST http://example.com/secure/keygen/test.cgi
+Content-Length: 19
+Content-Type: application/x-www-form-urlencoded
+
+Field1=Default+Text
+EOT
+
+$f->value(randomkey => "foo");
+ok($f->click->as_string, <<EOT);
+POST http://example.com/secure/keygen/test.cgi
+Content-Length: 33
+Content-Type: application/x-www-form-urlencoded
+
+randomkey=foo&Field1=Default+Text
+EOT
+
+$f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<form  ACTION="http://example.com/">
+   <select name=s>
+     <option>1
+     <option>2
+   <input name=t>
+</form>
+EOT
+
+ok($f);
+ok($f->find_input("t"));
+
+
+@f = HTML::Form->parse(<<EOT, "http://www.example.com");
+<form  ACTION="http://example.com/">
+   <select name=s>
+     <option>1
+     <option>2
+</form>
+<form  ACTION="http://example.com/">
+     <input name=t>
+</form>
+EOT
+
+ok(@f, 2);
+ok($f[0]->find_input("s"));
+ok($f[1]->find_input("t"));

@@ -1,8 +1,8 @@
 package Net::HTTP;
 
-# $Id: HTTP.pm,v 1.20 2001/04/19 05:43:52 gisle Exp $
+# $Id: HTTP.pm,v 1.24 2001/04/21 03:53:53 gisle Exp $
 
-require 5.005;
+require 5.005;  # 4-arg substr
 
 use strict;
 use vars qw($VERSION @ISA);
@@ -15,6 +15,8 @@ my $CRLF = "\015\012";   # "\r\n" is not portable
 
 sub configure {
     my($self, $cnf) = @_;
+
+    die "Listen option not allowed" if $cnf->{Listen};
     my $host = delete $cnf->{Host};
     my $peer = $cnf->{PeerAddr} || $cnf->{PeerHost};
     if ($host) {
@@ -146,6 +148,20 @@ sub write_request {
     print $self $self->format_request(@_);
 }
 
+sub write_chunk {
+    my $self = shift;
+    return unless defined($_[0]) && length($_[0]);
+    print $self hex(length($_[0])), $CRLF, $_[0], $CRLF;
+}
+
+sub write_chunk_eof {
+    my $self = shift;
+    my @h;
+    while (@_) {
+	push(@h, sprintf "%s: %s$CRLF", splice(@_, 0, 2));
+    }
+    print $self "0$CRLF", @h, $CRLF;
+}
 
 sub xread {
     sysread($_[0], $_[1], $_[2], $_[3] || 0);
@@ -231,8 +247,9 @@ sub read_response_headers {
     my $self = shift;
     my $status = my_readline($self);
     die "EOF instead of reponse status line" unless defined $status;
-    my($peer_ver, $code, $message) = split(' ', $status, 3);
-    die "Bad response status line: $status" unless $peer_ver =~ s,^HTTP/,,;
+    my($peer_ver, $code, $message) = split(/\s+/, $status, 3);
+    die "Bad response status line: '$status'"
+	if !$peer_ver || $peer_ver !~ s,^HTTP/,,;
     ${*$self}{'http_peer_version'} = $peer_ver;
     ${*$self}{'http_status'} = $code;
     my @headers = $self->read_header_lines;
@@ -267,6 +284,8 @@ sub read_entity_body {
 
     if (${*$self}{'http_first_body'}) {
 	${*$self}{'http_first_body'} = 0;
+	delete ${*$self}{'http_chunked'};
+	delete ${*$self}{'http_bytes'};
 	my $method = shift(@{${*$self}{'http_request_method'}});
 	my $status = ${*$self}{'http_status'};
 	if ($method eq "HEAD" || $status =~ /^(?:1|[23]04)/) {
@@ -317,7 +336,10 @@ sub read_entity_body {
 	return $n;
     }
     elsif (defined $bytes) {
-	return 0 unless $bytes;
+	unless ($bytes) {
+	    $$buf_ref = "";
+	    return 0;
+	}
 	my $n = $bytes;
 	$n = $size if $size && $size < $n;
 	$n = my_read($self, $$buf_ref, $n);
@@ -373,7 +395,7 @@ C<Net::HTTP> is a sub-class of C<IO::Socket::INET>.  You can mix the
 methods described below with reading and writing from the socket
 directly.
 
-The follwing methods are provided (in addition to those of
+The following methods are provided (in addition to those of
 C<IO::Socket::INET>):
 
 =over
@@ -390,13 +412,17 @@ C<IO::Socket::INET> as well as these:
 
 =item $s->host
 
-Get/set the default value of the C<Host> header to send.
+Get/set the default value of the C<Host> header to send.  The $host
+should not be set to an empty string (or C<undef>).
 
 =item $s->keep_alive
 
 Get/set the I<keep-alive> value.  If this value is TRUE then the
 request will sendt with headers indicating that the server should try
-to keep the connection open.
+to keep the connection open so that multiple requests can be sent.
+
+The actual headers set will depend on the value of the C<http_version>
+and C<peer_http_version> attributes.
 
 =item $s->http_version
 
@@ -407,16 +433,15 @@ This value can only be set to "1.0" or "1.1".  The default is "1.1".
 
 Get/set the protocol version number of our peer.  This value will
 initially be "1.0", but will be updated by a successful
-read_response_headers() method call.  The value of this header
-influence what headers are added to the request on I<keep-alive>.
+read_response_headers() method call.
 
 =item $s->format_request($method, $uri, %headers, [$content])
 
 Format a request message and return it as a string.  If the headers do
 not include a C<Host> header, then a header is inserted with the value
 of the C<host> attribute.  Headers like C<Connection> and
-C<Keep-Alive> might also be added depending on the I<keep-alive>
-status.
+C<Keep-Alive> might also be added depending on the status of the
+C<keep_alive> attribute.
 
 If $content is given (and it is non-empty), then a C<Content-Length>
 header is automatically added unless it was already present.
@@ -426,6 +451,24 @@ header is automatically added unless it was already present.
 Format and send a request message.  Arguments are the same as for
 format_request().  Returns true if successful.
 
+=item $s->write_chunk($data)
+
+Will write a new chunk of request entity body data.  This method
+should only be used if the C<Transfer-Encoding> header with a value of
+C<chunked> was sent in the request.  Note, writing zero-length data is
+a no-op.  Use the write_chunk_eof() method to signal end of entity
+body data.
+
+Returns true if successful.
+
+=item $s->write_chunk_eof(%trailers)
+
+Will write eof marker for chunked data and optional trailers.  Note
+that trailers should not really be used unless is was signaled
+with a C<Trailer> header.
+
+Returns true if successful.
+
 =item ($code, $mess, %headers) = $s->read_response_headers
 
 Read response headers from server.
@@ -434,6 +477,8 @@ Read response headers from server.
 
 Reads chunks of the entity body content.  Basically the same interface
 as for read() and sysread(), but buffer offset is not supported yet.
+This method should only be called after a successful
+read_response_headers() call.
 
 =item %headers = $s->get_trailers
 
@@ -461,7 +506,8 @@ arguments as sysread() and the is in fact implemented as a call to
 sysread().  Subclasses might want to override this method to contol
 how reading takes place.
 
-The object itself is a glob.
+The object itself is a glob.  Subclasses should avoid using hash key
+names prefixed with C<http_> and C<io_>.
 
 =head1 SEE ALSO
 

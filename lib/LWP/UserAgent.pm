@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 1.82 2001/04/19 05:34:03 gisle Exp $
+# $Id: UserAgent.pm,v 1.89 2001/04/21 04:15:28 gisle Exp $
 
 package LWP::UserAgent;
 use strict;
@@ -10,7 +10,10 @@ LWP::UserAgent - A WWW UserAgent class
 =head1 SYNOPSIS
 
  require LWP::UserAgent;
- $ua = LWP::UserAgent->new;
+ $ua = LWP::UserAgent->new(env_proxy => 1,
+                           keep_alive => 1,
+                           timeout => 30,
+                          );
 
  $request = HTTP::Request->new('GET', 'file://localhost/etc/motd');
 
@@ -92,7 +95,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.82 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.89 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -105,34 +108,89 @@ use LWP::Protocol ();
 use Carp ();
 
 
-=item $ua = LWP::UserAgent->new;
+=item $ua = LWP::UserAgent->new( %options );
 
-Constructor for the UserAgent.  Returns a reference to a
-LWP::UserAgent object.
+This class method constructs a new C<LWP::UserAgent> object and
+returns a reference to it.
+
+Key/value pair arguments may be provided to set up the initial state
+of the user agent.  The following options correspond to attribute
+methods described below:
+
+   KEY           DEFAULT
+   -----------   --------------------
+   agent         "libwww-perl/#.##"
+   from          undef
+   timeout       180
+   use_eval      1
+   parse_head    1
+   max_size      undef
+   cookie_jar    undef
+   conn_cache    undef
+
+The followings option are also accepted: If the C<env_proxy> option is
+passed in an has a TRUE value, then proxy settings are read from
+environment variables.  If the C<keep_alive> option is passed in, then
+a C<LWP::ConnCache> is set up (see conn_cache() method below).  The
+keep_alive value is a number and is passed on as the total_capacity
+for the connection cache.  The C<keep_alive> option also has the
+effect of loading and enabling the new experimental HTTP/1.1 protocol
+module.
 
 =cut
 
 sub new
 {
-    my($class, $init) = @_;
+    my($class, %cnf) = @_;
     LWP::Debug::trace('()');
 
-    my $self;
-    if (ref $init) {
-	$self = $init->clone;
-    } else {
-	$self = bless {
-		'agent'       => "libwww-perl/$LWP::VERSION",
-		'from'        => undef,
-		'timeout'     => 3*60,
-		'proxy'       => undef,
-		'cookie_jar'  => undef,
-		'use_eval'    => 1,
-                'parse_head'  => 1,
-                'max_size'    => 0,
-		'no_proxy'    => [],
-	}, $class;
+    my $agent = delete $cnf{agent};
+    $agent = $class->_agent unless defined $agent;
+
+    my $from  = delete $cnf{from};
+    my $timeout = delete $cnf{timeout};
+    $timeout = 3*60 unless defined $timeout;
+    my $use_eval = delete $cnf{use_eval};
+    $use_eval = 1 unless defined $use_eval;
+    my $parse_head = delete $cnf{parse_head};
+    $parse_head = 1 unless defined $parse_head;
+    my $max_size = delete $cnf{max_size};
+    my $env_proxy = delete $cnf{env_proxy};
+
+    my $cookie_jar = delete $cnf{cookie_jar};
+    my $conn_cache = delete $cnf{conn_cache};
+    my $keep_alive = delete $cnf{keep_alive};
+    Carp::croak("Can't mix conn_cache and keep_alive")
+	  if $conn_cache && $keep_alive;
+
+    if (%cnf && $^W) {
+	Carp::carp("Unrecognized LWP::UserAgent options: @{[sort keys %cnf]}");
     }
+
+    my $self = bless {
+		      from        => $from,
+		      timeout     => $timeout,
+		      use_eval    => $use_eval,
+		      parse_head  => $parse_head,
+		      max_size    => $max_size,
+		      proxy       => undef,
+		      no_proxy    => [],
+		     }, $class;
+
+    $self->agent($agent) if $agent;
+    $self->cookie_jar($cookie_jar) if $cookie_jar;
+    $self->env_proxy if $env_proxy;
+
+    if ($keep_alive) {
+	$conn_cache ||= { total_capacity => $keep_alive };
+
+	# this will go-away when HTTP/1.1 becomes the default
+	require LWP::Protocol::http11;
+	LWP::Protocol::implementor('http', 'LWP::Protocol::http11');
+    }
+    $self->conn_cache($conn_cache) if $conn_cache;
+
+    return $self;
 }
 
 
@@ -193,7 +251,11 @@ sub simple_request
     # Set User-Agent and From headers if they are defined
     $request->init_header('User-Agent' => $agent) if $agent;
     $request->init_header('From' => $from) if $from;
-    $request->init_header('Range' => "bytes=0-$max_size") if $max_size;
+    if (defined $max_size) {
+	my $last = $max_size - 1;
+	$last = 0 if $last < 0;  # there is no way to actually request no content
+	$request->init_header('Range' => "bytes=0-$last");
+    }
     $cookie_jar->add_cookie_header($request) if $cookie_jar;
 
     my $response;
@@ -314,7 +376,7 @@ sub request
 	    $scheme = $1;  # untainted now
 	    my $class = "LWP::Authen::\u$scheme";
 	    $class =~ s/-/_/g;
-	
+
 	    no strict 'refs';
 	    unless (%{"$class\::"}) {
 		# try to load it
@@ -411,35 +473,86 @@ sub get_basic_credentials
 
 Get/set the product token that is used to identify the user agent on
 the network.  The agent value is sent as the "User-Agent" header in
-the requests. The default agent name is "libwww-perl/#.##", where
-"#.##" is substitued with the version numer of this library.
+the requests.  The default is the string returned by the _agent()
+method (see below).
+
+If the $product_id ends with space then the C<_agent> string is
+appended to it.
 
 The user agent string should be one or more simple product identifiers
 with an optional version number separated by the "/" character.
 Examples are:
 
-  $ua->agent('Checkbot/0.4 ' . $ua->agent);
+  $ua->agent('Checkbot/0.4 ' . $ua->_agent);
+  $ua->agent('Checkbot/0.4 ');    # same as above
   $ua->agent('Mozilla/5.0');
+  $ua->agent("");                 # don't identify
+
+=item $ua->_agent
+
+Returns the default agent identifier.  This is a string of the form
+"libwww-perl/#.##", where "#.##" is substitued with the version numer
+of this library.
+
+=cut
+
+sub agent {
+    my $self = shift;
+    my $old = $self->{agent};
+    if (@_) {
+	my $agent = shift;
+	$agent .= $self->_agent if $agent && $agent =~ /\s+$/;
+	$self->{agent} = $agent;
+    }
+    $old;
+}
+
+sub _agent     { "libwww-perl/$LWP::VERSION" }
+
 
 =item $ua->from([$email_address])
 
 Get/set the Internet e-mail address for the human user who controls
 the requesting user agent.  The address should be machine-usable, as
 defined in RFC 822.  The from value is send as the "From" header in
-the requests.  There is no default.  Example:
+the requests.  Example:
 
   $ua->from('gaas@cpan.org');
+
+The default is to not send a "From" header.
 
 =item $ua->timeout([$secs])
 
 Get/set the timeout value in seconds. The default timeout() value is
 180 seconds, i.e. 3 minutes.
 
-=item $ua->cookie_jar([$cookies])
+=item $ua->cookie_jar([$cookie_jar_obj])
 
-Get/set the I<HTTP::Cookies> object to use.  The default is to have no
-cookie_jar, i.e. never automatically add "Cookie" headers to the
-requests.
+Get/set the cookie jar object to use.  The only requirement is that
+the cookie jar object must implement the extract_cookies($request) and
+add_cookie_header($response) methods.  These methods will then be
+invoked by the user agent as requests are sent and responses are
+received.  Normally this will be a C<HTTP::Cookies> object or some
+subclass.
+
+The default is to have no cookie_jar, i.e. never automatically add
+"Cookie" headers to the requests.
+
+Shortcut: If a reference to a plain hash is passed in as the
+$cookie_jar_object, then it is replaced with an instance of
+C<HTTP::Cookies> that is initalized based on the hash.  This form also
+automatically loads the C<HTTP::Cookies> module.  It means that:
+
+  $ua->cookie_jar({ file => "$ENV{HOME}/.cookies.txt" });
+
+is really just a shortcut for:
+
+  require HTTP::Cookies;
+  $ua->cookie_jar(HTTP::Cookies->new(file => "$ENV{HOME}/.cookies.txt"));
+
+=item $ua->conn_cache([$cache_obj])
+
+Get/set the I<LWP::ConnCache> object to use.
 
 =item $ua->parse_head([$boolean])
 
@@ -449,19 +562,45 @@ TRUE.  Do not turn this off, unless you know what you are doing.
 
 =item $ua->max_size([$bytes])
 
-Get/set the size limit for response content.  The default is 0,
+Get/set the size limit for response content.  The default is C<undef>,
 which means that there is no limit.  If the returned response content
 is only partial, because the size limit was exceeded, then a
-"X-Content-Range" header will be added to the response.
+"Client-Aborted" header will be added to the response.
 
 =cut
 
 sub timeout    { shift->_elem('timeout',   @_); }
-sub agent      { shift->_elem('agent',     @_); }
 sub from       { shift->_elem('from',      @_); }
-sub cookie_jar { shift->_elem('cookie_jar',@_); }
 sub parse_head { shift->_elem('parse_head',@_); }
 sub max_size   { shift->_elem('max_size',  @_); }
+
+sub cookie_jar {
+    my $self = shift;
+    my $old = $self->{cookie_jar};
+    if (@_) {
+	my $jar = shift;
+	if (ref($jar) eq "HASH") {
+	    require HTTP::Cookies;
+	    $jar = HTTP::Cookies->new(%$jar);
+	}
+	$self->{cookie_jar} = $jar;
+    }
+    $old;
+}
+
+sub conn_cache {
+    my $self = shift;
+    my $old = $self->{conn_cache};
+    if (@_) {
+	my $cache = shift;
+	if (ref($cache) eq "HASH") {
+	    require LWP::ConnCache;
+	    $cache = LWP::ConnCache->new(%$cache);
+	}
+	$self->{conn_cache} = $cache;
+    }
+    $old;
+}
 
 # depreciated
 sub use_eval   { shift->_elem('use_eval',  @_); }
@@ -488,6 +627,10 @@ sub clone
     # elements that are references must be handled in a special way
     $copy->{'proxy'} = { %{$self->{'proxy'}} };
     $copy->{'no_proxy'} = [ @{$self->{'no_proxy'}} ];  # copy array
+
+    # remove reference to objects for now
+    delete $copy->{cookie_jar};
+    delete $copy->{conn_cache};
 
     $copy;
 }

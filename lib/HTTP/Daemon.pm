@@ -1,4 +1,4 @@
-# $Id: Daemon.pm,v 1.26 2002/08/18 03:23:43 gisle Exp $
+# $Id: Daemon.pm,v 1.28 2003/10/14 18:17:08 gisle Exp $
 #
 
 use strict;
@@ -64,7 +64,7 @@ to the I<IO::Socket::INET> base class.
 
 use vars qw($VERSION @ISA $PROTO $DEBUG);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.26 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
 
 use IO::Socket qw(AF_INET INADDR_ANY inet_ntoa);
 @ISA=qw(IO::Socket::INET);
@@ -279,7 +279,7 @@ sub get_request
 	while ($buf =~ s/^([^\012]*)\012//) {
 	    $_ = $1;
 	    s/\015$//;
-	    if (/^([\w\-]+)\s*:\s*(.*)/) {
+	    if (/^([^:\s]+)\s*:\s*(.*)/) {
 		$r->push_header($key, $val) if $key;
 		($key, $val) = ($1, $2);
 	    } elsif (/^\s+(.*)/) {
@@ -757,7 +757,9 @@ sub send_dir
 }
 
 
-=item $c->send_file($fd);
+=item $c->send_file( $filename )
+
+=item $c->send_file( $fd )
 
 Copy the file to the client.  The file can be a string (which
 will be interpreted as a filename) or a reference to an I<IO::Handle>
@@ -769,11 +771,11 @@ sub send_file
 {
     my($self, $file) = @_;
     my $opened = 0;
+    local(*FILE);
     if (!ref($file)) {
-	local(*F);
-	open(F, $file) || return undef;
-	binmode(F);
-	$file = \*F;
+	open(FILE, $file) || return undef;
+	binmode(FILE);
+	$file = \*FILE;
 	$opened++;
     }
     my $cnt = 0;

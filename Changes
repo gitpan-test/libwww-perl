@@ -1,3 +1,47 @@
+2003-10-14   Gisle Aas <gisle@ActiveState.com>
+
+    Release 5.71
+
+    Support open-ended Range: header for ftp requests.
+    Patch by Matthew Eldridge <eldridge@Graphics.Stanford.EDU>.
+
+    lwp-request now prints unsuccessful responses in the same way
+    as successsful ones.  The status will still indicate failures.
+    Based on a patch by Steve Hay <steve.hay@uk.radan.com>.
+
+    HTML::Form's dump now also print alternative value names.
+
+    HTML::Form will now pick up the phrase after a <input type=radio>
+    or <input type=checkbox> and use that as the name of the checked
+    value.
+
+    HTML::Form's find_input now returns all inputs that match in
+    array context.  Based on patch by Mark Stosberg <markstos@cpan.org>
+    in <http://rt.cpan.org/Ticket/Display.html?id=3320>.
+
+    HTTP::Daemon's send_file() method did not work when given
+    a file name.  Patch by Dave W. Smith <dws@postcognitive.com>.
+
+    HTTP::Daemon is less strict about field names in the request
+    headers is received.  The Norton Internet Security firewall
+    apparently likes to send requests with a header called
+    '~~~~~~~~~~~~~~~'.   Further details in
+    <http://rt.cpan.org/Ticket/Display.html?id=2531>.
+
+    LWP::Protocol::http assumed $1 would be meaningful without
+    testing the outcome of the match.  This sometimes produced
+    an extra garbage Authentication header.
+    Based on the patch by <bai@dreamarts.co.jp> in
+    <http://rt.cpan.org/Ticket/Display.html?id=1994>.
+
+    LWP::Protocol::mailto will try harder to locate the sendmail
+    program as suggested in <http://rt.cpan.org/Ticket/Display.html?id=2363>.
+    Also let $ENV{SENDMAIL} override the search.
+
+    Patch to enable OS/2 build by Ilya Zakharevich.
+
+
+
 2003-10-13   Gisle Aas <gisle@ActiveState.com>
 
     Release 5.70

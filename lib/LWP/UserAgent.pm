@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 2.6 2003/10/14 18:20:17 gisle Exp $
+# $Id: UserAgent.pm,v 2.13 2003/10/15 14:00:21 gisle Exp $
 
 package LWP::UserAgent;
 use strict;
@@ -117,7 +117,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%03d", q$Revision: 2.6 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 2.13 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -155,6 +155,7 @@ methods described below:
    use_eval                1
    parse_head              1
    max_size                undef
+   max_redirect            7
    cookie_jar              undef
    conn_cache              undef
    protocols_allowed       undef
@@ -188,6 +189,8 @@ sub new
     my $parse_head = delete $cnf{parse_head};
     $parse_head = 1 unless defined $parse_head;
     my $max_size = delete $cnf{max_size};
+    my $max_redirect = delete $cnf{max_redirect};
+    $max_redirect = 7 unless defined $max_redirect;
     my $env_proxy = delete $cnf{env_proxy};
 
     my $cookie_jar = delete $cnf{cookie_jar};
@@ -219,15 +222,16 @@ sub new
     }
 
     my $self = bless {
-		      from        => $from,
-		      timeout     => $timeout,
-		      use_eval    => $use_eval,
-		      parse_head  => $parse_head,
-		      max_size    => $max_size,
-		      proxy       => undef,
-		      no_proxy    => [],
-                      protocols_allowed => $protocols_allowed,
-                      protocols_forbidden => $protocols_forbidden,
+		      from         => $from,
+		      timeout      => $timeout,
+		      use_eval     => $use_eval,
+		      parse_head   => $parse_head,
+		      max_size     => $max_size,
+		      max_redirect => $max_redirect,
+		      proxy        => undef,
+		      no_proxy     => [],
+                      protocols_allowed     => $protocols_allowed,
+                      protocols_forbidden   => $protocols_forbidden,
                       requests_redirectable => $requests_redirectable,
 		     }, $class;
 
@@ -372,9 +376,9 @@ EOT
 	};
 	if ($@) {
 	    $@ =~ s/ at .* line \d+.*//s;  # remove file/line number
-	    $response =
-	      HTTP::Response->new(&HTTP::Status::RC_INTERNAL_SERVER_ERROR,
-				  $@);
+	    $response = _new_response($request,
+				      &HTTP::Status::RC_INTERNAL_SERVER_ERROR,
+				      $@);
 	}
     } else {
 	$response = $protocol->request($request, $proxy,
@@ -425,7 +429,7 @@ sub prepare_request
 =item $ua->simple_request($request, [$arg [, $size]])
 
 This method dispatches a single WWW request on behalf of a user, and
-returns the response received.  If differs from C<send_request()> by
+returns the response received.  It differs from C<send_request()> by
 automatically calling the C<prepare_request()> method before the
 request is sent.
 
@@ -468,7 +472,10 @@ sub request
 		       "Unknown code $code"));
 
     if ($code == &HTTP::Status::RC_MOVED_PERMANENTLY or
-	$code == &HTTP::Status::RC_MOVED_TEMPORARILY) {
+	$code == &HTTP::Status::RC_FOUND or
+	$code == &HTTP::Status::RC_SEE_OTHER or
+	$code == &HTTP::Status::RC_TEMPORARY_REDIRECT)
+    {
 
 	# Make a copy of the request and initialize it with the new URI
 	my $referral = $request->clone;
@@ -484,6 +491,11 @@ sub request
 		            ->abs($base);
 	}
 
+	$referral->method("GET")
+	    if ($code == &HTTP::Status::RC_SEE_OTHER ||
+		$code == &HTTP::Status::RC_FOUND) &&
+		    $referral->method ne "HEAD";
+
 	$referral->url($referral_uri);
 	$referral->remove_header('Host', 'Cookie');
 
@@ -493,10 +505,9 @@ sub request
 	my $count = 0;
 	my $r = $response;
 	while ($r) {
-	    if (++$count > 13 ||
-                $r->request->url->as_string eq $referral_uri->as_string) {
+	    if (++$count > $self->{max_redirect}) {
 		$response->header("Client-Warning" =>
-				  "Redirect loop detected");
+				  "Redirect loop detected (max_redirect = $self->{max_redirect})");
 		return $response;
 	    }
 	    $r = $r->previous;
@@ -550,6 +561,11 @@ sub request
 		    }
 		    next CHALLENGE;
 		}
+	    }
+	    unless ($class->can("authenticate")) {
+		$response->header("Client-Warning" =>
+				  "Unsupported authentication scheme '$scheme'");
+		next CHALLENGE;
 	    }
 	    return $class->authenticate($self, $proxy, $challenge, $response,
 					$request, $arg, $size);
@@ -784,7 +800,7 @@ sub is_protocol_supported
 
 =item $ua->requests_redirectable( \@requests );  # to set
 
-This reads or sets the object's list of request names that 
+This reads or sets the object's list of request names that
 C<$ua-E<gt>redirect_ok(...)> will allow redirection for.  By
 default, this is C<['GET', 'HEAD']>, as per RFC 2068.  To
 change to include 'POST', consider:
@@ -985,12 +1001,26 @@ which means that there is no limit.  If the returned response content
 is only partial, because the size limit was exceeded, then a
 "Client-Aborted" header will be added to the response.
 
+=item $ua->max_redirect([$n])
+
+This reads or sets the object's limit of how many times it will obey
+redirection responses in a given C<< $ua->get(...) / $ua->put(...) /
+$ua->head(...) / $ua->request(...) >> / etc. cycle.
+
+By default, the value is 7. This means that if you call C<<
+$ua->get($url) >> and the response is a redirect elsewhere which is in
+turn a redirect, and so on seven times, then LWP gives up after that
+seventh request.  Otherwise (like if the seventh or earlier isn't a
+redirect), then the response from C<< $ua->get($url) >> redirects
+are followed.
+
 =cut
 
-sub timeout    { shift->_elem('timeout',   @_); }
-sub from       { shift->_elem('from',      @_); }
-sub parse_head { shift->_elem('parse_head',@_); }
-sub max_size   { shift->_elem('max_size',  @_); }
+sub timeout      { shift->_elem('timeout',      @_); }
+sub from         { shift->_elem('from',         @_); }
+sub parse_head   { shift->_elem('parse_head',   @_); }
+sub max_size     { shift->_elem('max_size',     @_); }
+sub max_redirect { shfit->_elem('max_redirect', @_); }
 
 sub cookie_jar {
     my $self = shift;
@@ -1239,6 +1269,9 @@ sub _new_response {
     my $response = HTTP::Response->new($code, $message);
     $response->request($request);
     $response->header("Client-Date" => HTTP::Date::time2str(time));
+    $response->header("Client-Warning" => "Internal response");
+    $response->header("Content-Type" => "text/plain");
+    $response->content("$code $message\n");
     return $response;
 }
 
@@ -1253,7 +1286,7 @@ F<lwp-mirror> for examples of usage.
 
 =head1 COPYRIGHT
 
-Copyright 1995-2002 Gisle Aas.
+Copyright 1995-2003 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

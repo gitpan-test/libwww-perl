@@ -1,3 +1,57 @@
+2003-10-15   Gisle Aas <gisle@ActiveState.com>
+
+    Release 5.72
+
+    Requests for some non-HTTP URLs would fail if the cookie_jar
+    was enabled.  The HTTP::Cookies::add_cookie_header now ignored
+    not-HTTP requests.
+
+    The new local/http test failed on Windows because of a missing
+    binmode().
+
+    Suppress Client-SSL-Warning warning header when Crypt::SSLeay
+    is able to verify the peer certificate.   Patch contributed by
+    Joshua Chamas <joshua@chamas.com>.
+
+    HTTP::Request::Common::POST did not add a 'Content-Length' header
+    when the content ended up empty.  Fixed by a patch contributed
+    by Brian J. Murrell.
+
+    Internally generated responses now contain a text/plain part
+    that repeats the status line.  They also have a "Client-Warning"
+    header that can be used to differentiate these responses from
+    real server responses.
+
+    LWP::UserAgent now deals with 303 and 307 redirects.  The behaviour
+    of 302 redirects has also changed to be like 303; i.e. change the
+    method to be "GET".  This is what most browsers do.  Based on
+    a patch contributed by Tom Hughes <thh@cyberscience.com>.
+
+    LWP::UserAgent now implements a 'max_redirect' attribute with a
+    default value of 7.  This should also fix the problem where
+    redirects to the same URL to get a cookie set did not work.
+    Based on a patch by Sean M. Burke <sburke@cpan.org>.
+
+    NTML authentication should continue to fail if the Authen::NTLM
+    module can't be loaded.  LWP used to think the scheme was
+    available as soon as the module stash showed up.  Not it looks
+    for the authenticate method to be defined.  Patch by Jan Dubois.
+
+    lwp-download will not try to rename *.tbz and *.tar.bz2 to
+    match the reported content type.  Patch contributed by
+    Robin Barker <Robin.Barker@npl.co.uk>.
+
+    HTTP::Cookies::Netscape documentation fix by Sean M. Burke.
+
+    HTTP::Cookies::Microsoft documentation fix by Johnny Lee.
+
+    The code that tries to avoid installing 'HEAD' on top of
+    'head' on systems like Mac OS was further improved to look
+    in $Config{installscript} instead of $Config{sitebin}.
+    Patch provided by Ken Williams <ken@mathforum.org>.
+
+
+
 2003-10-14   Gisle Aas <gisle@ActiveState.com>
 
     Release 5.71

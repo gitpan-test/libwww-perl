@@ -1,12 +1,13 @@
 package HTML::Form;
 
+# $Id: Form.pm,v 1.36 2003/10/15 12:49:32 gisle Exp $
+
 use strict;
 use URI;
 use Carp ();
 
 use vars qw($VERSION);
-
-$VERSION='1.01';  # $Date: 2003/10/14 18:48:59 $
+$VERSION = sprintf("%d.%03d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
 
 my %form_tags = map {$_ => 1} qw(input textarea button select option);
 
@@ -726,7 +727,7 @@ sub value
 
 =item $input->possible_values
 
-Returns a list of all values that and input can take.  For inputs that
+Returns a list of all values that an input can take.  For inputs that
 do not have discrete values, this returns an empty list.
 
 =cut

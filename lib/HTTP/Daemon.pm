@@ -1,4 +1,4 @@
-# $Id: Daemon.pm,v 1.28 2003/10/14 18:17:08 gisle Exp $
+# $Id: Daemon.pm,v 1.30 2003/10/15 19:44:16 gisle Exp $
 #
 
 use strict;
@@ -64,7 +64,7 @@ to the I<IO::Socket::INET> base class.
 
 use vars qw($VERSION @ISA $PROTO $DEBUG);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
 
 use IO::Socket qw(AF_INET INADDR_ANY inet_ntoa);
 @ISA=qw(IO::Socket::INET);

@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 2.1 2001/12/11 21:11:29 gisle Exp $
+# $Id: UserAgent.pm,v 2.3 2002/08/18 03:29:47 gisle Exp $
 
 package LWP::UserAgent;
 use strict;
@@ -16,16 +16,30 @@ LWP::UserAgent - A WWW UserAgent class
                              );
 
  $response = $ua->get('http://search.cpan.org/');
+ die "Error while getting ", $response->request->uri,
+   " -- ", $response->status_line, "\nAborting"
+  unless $response->is_success;
 
+ # or:
+
+ $response = $ua->get('http://search.cpan.org/',
+                        ':content_file' => '/tmp/sco.html'
+                     );
+ # or:
+
+ $response = $ua->get('http://search.cpan.org/',
+                        ':content_cb'     => \&callback,
+                        ':read_size_hint' => 4096,
+                     );
  # or:
 
  $request = HTTP::Request->new('GET', 'http://search.cpan.org/');
   # and then one of these:
  $response = $ua->request($request); # or
- $response = $ua->request($request, '/tmp/sss'); # or
+ $response = $ua->request($request, '/tmp/sco.html'); # or
  $response = $ua->request($request, \&callback, 4096);
 
- sub callback { my($data, $response, $protocol) = @_; .... }
+ sub callback { my($data, $response, $protocol) = @_; ... }
 
 =head1 DESCRIPTION
 
@@ -44,7 +58,7 @@ request() methods, which dispatches it using the relevant protocol,
 and returns a C<HTTP::Response> object.
 
 There are convenience methods for sending the most common request
-types; get(), head() and post().
+types: get(), head() and post().
 
 The basic approach of the library is to use HTTP style communication
 for all protocol schemes, i.e. you even receive an C<HTTP::Response>
@@ -103,7 +117,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%03d", q$Revision: 2.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 2.3 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -545,6 +559,26 @@ This is a shortcut for C<$ua-E<gt>request(HTTP::Request::Common::GET(
 $url, Header =E<gt> Value,... ))>.  See
 L<HTTP::Request::Common|HTTP::Request::Common>.
 
+To specify a file that you want the content of the request to be
+saved to (instead of being saved in C<< $response->content >>),
+specify a header C<< ':content_file' => I<PATHSPEC> >>.
+This corresponds to C<< $ua->request( HTTP::Request::Commont::GET(...),
+'/path/to/that/file' ) >> (or whatever relative or absolute file
+pathspec you specify).
+
+To instead specify that the content, as it is received, should be sent
+to a routine, specify a header C<< ':content_cb' => I<SUBREF> >>. To
+suggest a size for the chunks of data sent to that callback, you can
+optionally specify a header C<< ':read_size_hint' => I<BYTECOUNT> >>.
+This corresponds to C<< $ua->request(
+HTTP::Request::Commont::GET(...), \&callback, 4096 ) >> (or whatever
+subref and optional bytecount you specify).
+
+These three optional headers that start with ":" are never
+made into real request headers, but are extracted and used as options
+to the eventual call to C<< $ua->request(REQ, options...) >> and
+thereby to C<< $ua->send_request(REQ, options...) >>.
+
 =item $ua->post($url, \%formref, Header => Value,...);
 
 This is a shortcut for C<$ua-E<gt>request( HTTP::Request::Common::POST(
@@ -555,38 +589,104 @@ reference is optional, and can be either a hashref (C<\%formdata> or C<{
 C<['key1' => 'val2', 'key2' => 'val2', ...]>).  See
 L<HTTP::Request::Common|HTTP::Request::Common>.
 
+You can also use the C<':content_file' / ':content_cb' /
+':read_size_hint'> headers just as with C<< $ua->get >>.
+
 =item $ua->head($url, Header => Value,...);
 
 This is a shortcut for C<$ua-E<gt>request( HTTP::Request::Common::HEAD(
 $url, Header =E<gt> Value,... ))>.  See
 L<HTTP::Request::Common|HTTP::Request::Common>.
 
-=item $ua->put($url, Header => Value,...);
-
-This is a shortcut for C<$ua-E<gt>request( HTTP::Request::Common::PUT(
-$url, Header =E<gt> Value,... ))>.  See
-L<HTTP::Request::Common|HTTP::Request::Common>.
+You can also use the C<':content_file' / ':content_cb' /
+':read_size_hint'> headers just as with C<< $ua->get >>.
 
 =cut
 
+#=item $ua->put($url, Header => Value,...);
+#
+#This is a shortcut for C<$ua-E<gt>request( HTTP::Request::Common::PUT(
+#$url, Header =E<gt> Value,... ))>.  See
+#L<HTTP::Request::Common|HTTP::Request::Common>.
+#
+#=cut
+
 sub get {
-  require HTTP::Request::Common;
-  return shift->request( HTTP::Request::Common::GET( @_ ) );
+    require HTTP::Request::Common;
+    my($self, @parameters) = @_;
+    my @suff = $self->_process_colonic_headers(\@parameters,1);
+    return $self->request( HTTP::Request::Common::GET( @parameters ), @suff );
 }
 
 sub post {
-  require HTTP::Request::Common;
-  return shift->request( HTTP::Request::Common::POST( @_ ) );
+    require HTTP::Request::Common;
+    my($self, @parameters) = @_;
+    my @suff = $self->_process_colonic_headers(\@parameters,2);
+    return $self->request( HTTP::Request::Common::POST( @parameters ), @suff );
 }
 
 sub head {
-  require HTTP::Request::Common;
-  return shift->request( HTTP::Request::Common::HEAD( @_ ) );
+    require HTTP::Request::Common;
+    my($self, @parameters) = @_;
+    my @suff = $self->_process_colonic_headers(\@parameters,1);
+    return $self->request( HTTP::Request::Common::HEAD( @parameters ), @suff );
 }
 
-sub put {
-  require HTTP::Request::Common;
-  return shift->request( HTTP::Request::Common::PUT( @_ ) );
+#sub put {
+#  require HTTP::Request::Common;
+#  my($self, @parameters) = @_;
+#  my @suff = $self->_process_colonic_headers(\@parameters,1);
+#  return $self->request( HTTP::Request::Common::PUT( @parameters ), @suff );
+#}
+
+
+sub _process_colonic_headers {
+    # Process :content_cb / :content_file / :read_size_hint headers.
+    my($self, $args, $start_index) = @_;
+
+    my($arg, $size);
+    for(my $i = $start_index; $i < @$args; $i += 2) {
+	next unless defined $args->[$i];
+
+	#printf "Considering %s => %s\n", $args->[$i], $args->[$i + 1];
+
+	if($args->[$i] eq ':content_cb') {
+	    # Some sanity-checking...
+	    $arg = $args->[$i + 1];
+	    Carp::croak("A :content_cb value can't be undef") unless defined $arg;
+	    Carp::croak("A :content_cb value must be a coderef")
+		unless ref $arg and UNIVERSAL::isa($arg, 'CODE');
+	    
+	}
+	elsif ($args->[$i] eq ':content_file') {
+	    $arg = $args->[$i + 1];
+
+	    # Some sanity-checking...
+	    Carp::croak("A :content_file value can't be undef")
+		unless defined $arg;
+	    Carp::croak("A :content_file value can't be a reference")
+		if ref $arg;
+	    Carp::croak("A :content_file value can't be \"\"")
+		unless length $arg;
+
+	}
+	elsif ($args->[$i] eq ':read_size_hint') {
+	    $size = $args->[$i + 1];
+	    # Bother checking it?
+
+	}
+	else {
+	    next;
+	}
+	splice @$args, $i, 2;
+	$i -= 2;
+    }
+
+    # And return a suitable suffix-list for request(REQ,...)
+
+    return             unless defined $arg;
+    return $arg, $size if     defined $size;
+    return $arg;
 }
 
 
@@ -1143,7 +1243,7 @@ F<lwp-mirror> for examples of usage.
 
 =head1 COPYRIGHT
 
-Copyright 1995-2001 Gisle Aas.
+Copyright 1995-2002 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

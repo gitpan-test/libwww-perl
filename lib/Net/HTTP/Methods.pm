@@ -1,6 +1,6 @@
 package Net::HTTP::Methods;
 
-# $Id: Methods.pm,v 1.7 2001/12/05 16:58:05 gisle Exp $
+# $Id: Methods.pm,v 1.10 2002/12/20 08:32:59 gisle Exp $
 
 require 5.005;  # 4-arg substr
 
@@ -170,13 +170,13 @@ sub write_request {
 sub format_chunk {
     my $self = shift;
     return $_[0] unless defined($_[0]) && length($_[0]);
-    return hex(length($_[0])) . $CRLF . $_[0] . $CRLF;
+    return sprintf("%x", length($_[0])) . $CRLF . $_[0] . $CRLF;
 }
 
 sub write_chunk {
     my $self = shift;
     return 1 unless defined($_[0]) && length($_[0]);
-    $self->print(hex(length($_[0])) . $CRLF . $_[0] . $CRLF);
+    $self->print(sprintf("%x", length($_[0])) . $CRLF . $_[0] . $CRLF);
 }
 
 sub format_chunk_eof {
@@ -296,7 +296,7 @@ sub read_response_headers {
     my $laxed = $opt{laxed};
 
     my($status, $eol) = my_readline($self);
-    die "EOF instead of reponse status line" unless defined $status;
+    die "EOF instead of response status line" unless defined $status;
 
     my($peer_ver, $code, $message) = split(/\s+/, $status, 3);
     if (!$peer_ver || $peer_ver !~ s,^HTTP/,,) {
@@ -419,12 +419,15 @@ sub read_entity_body {
 	if ($chunked <= 0) {
 	    my $line = my_readline($self);
 	    if ($chunked == 0) {
-		die "Not empty: '$line'" unless $line eq "";
+		die "Missing newline after chunk data: '$line'" unless $line eq "";
 		$line = my_readline($self);
 	    }
-	    $line =~ s/;.*//;  # ignore potential chunk parameters
-	    $line =~ s/\s+$//; # avoid warnings from hex()
-	    $chunked = hex($line);
+	    my $chunk_len = $line;
+	    $chunk_len =~ s/;.*//;  # ignore potential chunk parameters
+	    unless ($chunk_len =~ /^([\da-fA-F]+)\s*$/) {
+		die "Bad chunk-size in HTTP response: $line";
+	    }
+	    $chunked = hex($1);
 	    if ($chunked == 0) {
 		${*$self}{'http_trailers'} = [$self->_read_header_lines];
 		$$buf_ref = "";

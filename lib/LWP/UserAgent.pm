@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 1.91 2001/08/02 21:12:56 gisle Exp $
+# $Id: UserAgent.pm,v 1.94 2001/08/28 05:20:36 gisle Exp $
 
 package LWP::UserAgent;
 use strict;
@@ -10,13 +10,17 @@ LWP::UserAgent - A WWW UserAgent class
 =head1 SYNOPSIS
 
  require LWP::UserAgent;
- $ua = LWP::UserAgent->new(env_proxy => 1,
-                           keep_alive => 1,
-                           timeout => 30,
-                          );
+ my $ua = LWP::UserAgent->new(env_proxy => 1,
+                              keep_alive => 1,
+                              timeout => 30,
+                             );
 
- $request = HTTP::Request->new('GET', 'file://localhost/etc/motd');
+ $response = $ua->get('http://search.cpan.org/');
 
+ # or:
+
+ $request = HTTP::Request->new('GET', 'http://search.cpan.org/');
+  # and then one of these:
  $response = $ua->request($request); # or
  $response = $ua->request($request, '/tmp/sss'); # or
  $response = $ua->request($request, \&callback, 4096);
@@ -95,7 +99,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.91 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.94 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -107,6 +111,19 @@ use LWP::Protocol ();
 
 use Carp ();
 
+unless ($ENV{LWP_USE_HTTP1}) {
+    # XXX Try to force the experimental HTTP/1.1 implementations as
+    # XXX the default for http and https.  This should give it more
+    # XXX test exposure I hope.  This block will go away in the
+    # XXX real release.
+
+    require LWP::Protocol::http11;
+    LWP::Protocol::implementor('http', 'LWP::Protocol::http11');
+    eval {
+        require LWP::Protocol::https11;
+        LWP::Protocol::implementor('https', 'LWP::Protocol::https11');
+    };
+}
 
 =item $ua = LWP::UserAgent->new( %options );
 
@@ -243,9 +260,25 @@ object itself.
 sub simple_request
 {
     my($self, $request, $arg, $size) = @_;
-    local($SIG{__DIE__});  # protect agains user defined die handlers
 
-    my($method, $url) = ($request->method, $request->url);
+    # some sanity checking
+    if (defined $request) {
+	if (ref $request) {
+	    Carp::croak("You need a request object, not a " . ref($request) . " object")
+	      if ref($request) eq 'ARRAY' or ref($request) eq 'HASH' or
+		 !$request->can('method') or !$request->can('uri');
+	}
+	else {
+	    Carp::croak("You need a request object, not '$request'");
+	}
+    }
+    else {
+        Carp::croak("No request object passed in");
+    }
+
+    my($method, $url) = ($request->method, $request->uri);
+
+    local($SIG{__DIE__});  # protect agains user defined die handlers
 
     # Check that we have a METHOD and a URL first
     return HTTP::Response->new(&HTTP::Status::RC_BAD_REQUEST, "Method missing")

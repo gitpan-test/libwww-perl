@@ -1,4 +1,4 @@
-# $Id: http11.pm,v 1.19 2001/05/02 05:14:14 gisle Exp $
+# $Id: http11.pm,v 1.22 2001/08/28 04:34:31 gisle Exp $
 #
 # You can tell LWP to use this module for 'http' requests by running
 # code like this before you make requests:
@@ -27,7 +27,7 @@ my $CRLF = "\015\012";
     use vars qw(@ISA);
     @ISA = qw(Net::HTTP);
 
-    sub xread {
+    sub sysread {
 	my $self = shift;
 	if (my $timeout = ${*$self}{io_socket_timeout}) {
 	    my $io_sel = (${*$self}{myhttp_io_sel} ||= $self->io_sel);
@@ -67,14 +67,14 @@ sub _new_socket
     }
 
     local($^W) = 0;  # IO::Socket::INET can be noisy
-    my $sock = LWP::Protocol::MyHTTP->new(PeerAddr => $host,
-					  PeerPort => $port,
-					  Proto    => 'tcp',
-					  Timeout  => $timeout,
-					  KeepAlive => !!$conn_cache,
-					  SendTE    => 1,
-					  $self->_extra_sock_opts($host, $port),
-					 );
+    my $sock = $self->_conn_class->new(PeerAddr => $host,
+				       PeerPort => $port,
+				       Proto    => 'tcp',
+				       Timeout  => $timeout,
+				       KeepAlive => !!$conn_cache,
+				       SendTE    => 1,
+				       $self->_extra_sock_opts($host, $port),
+				      );
 
     unless ($sock) {
 	# IO::Socket::INET leaves additional error messages in $@
@@ -83,6 +83,11 @@ sub _new_socket
     }
     $sock->blocking(0);
     $sock;
+}
+
+sub _conn_class
+{
+    "LWP::Protocol::MyHTTP";
 }
 
 sub _extra_sock_opts  # to be overridden by subclass
@@ -182,7 +187,11 @@ sub request
 
     my @h;
     my $request_headers = $request->headers;
-    $request_headers->scan(sub { push(@h, @_); });
+    $request_headers->scan(sub {
+			       my($k, $v) = @_;
+			       $v =~ s/\n/ /g;
+			       push(@h, $k, $v);
+			   });
 
     my $content_ref = $request->content_ref;
     $content_ref = $$content_ref if ref($$content_ref);
@@ -274,7 +283,7 @@ sub request
 	    if ($r && @$r) {
 		# readable
 		my $buf = $socket->_rbuf;
-		my $n = sysread($socket, $buf, 1024, length($buf));
+		my $n = $socket->sysread($buf, 1024, length($buf));
 		unless ($n) {
 		    die "EOF";
 		}
@@ -340,7 +349,7 @@ sub request
 
     my $complete;
     $response = $self->collect($arg, $response, sub {
-	my $buf;
+	my $buf = ""; #prevent use of uninitialized value in SSLeay.xs
 	my $n;
       READ:
 	{

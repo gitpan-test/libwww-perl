@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# $Id: lwp-download,v 2.8 2004/11/12 13:27:46 gisle Exp $
+# $Id: lwp-download,v 2.15 2004/12/11 14:02:59 gisle Exp $
 
 =head1 NAME
 
@@ -8,14 +8,25 @@ lwp-download - Fetch large files from the web
 
 =head1 SYNOPSIS
 
- lwp-download [-a] <url> [<local file>]
+B<lwp-download> [B<-a>] <I<url>> [<I<local path>>]
 
 =head1 DESCRIPTION
 
-The I<lwp-download> program will down load the document specified by the URL
-given as the first command line argument to a local file.  The local
-filename used to save the document is guessed from the URL unless
-specified as the second command line argument.
+The B<lwp-download> program will save the file at I<url> to a local
+file.
+
+If I<local path> is not specified, then the current directory is
+assumed.
+
+If I<local path> is a directory, then the basename of the file to save
+is picked up from the Content-Disposition header or the URL of the
+response.  If the file already exists, then B<lwp-download> will
+prompt before it overwrites and will fail if its standard input is not
+a terminal.  This form of invocation will also fail is no acceptable
+filename can be derived from the sources mentioned above.
+
+If I<local path> is not a directory, then it is simply used as the
+path to save into.
 
 The I<lwp-download> program is implemented using the I<libwww-perl>
 library.  It is better suited to down load big files than the
@@ -23,8 +34,8 @@ I<lwp-request> program because it does not store the file in memory.
 Another benefit is that it will keep you updated about its progress
 and that you don't have much options to worry about.
 
-Use the C<-a> option to save the file in text (ascii) mode.  Might make a
-difference on dosish systems.
+Use the C<-a> option to save the file in text (ascii) mode.  Might
+make a difference on dosish systems.
 
 =head1 EXAMPLE
 
@@ -51,6 +62,7 @@ use HTTP::Date ();
 
 my $progname = $0;
 $progname =~ s,.*/,,;    # only basename left in progname
+$progname =~ s,.*\\,, if $^O eq "MSWin32";
 $progname =~ s/\.\w*$//; # strip extension if any
 
 #parse option
@@ -62,14 +74,15 @@ unless (getopts('a', \%opt)) {
 
 my $url = URI->new(shift || usage());
 my $argfile = shift;
-my $version = q$Revision: 2.8 $;
+usage() if defined($argfile) && !length($argfile);
+my $version = q$Revision: 2.15 $;
+$version =~ s/[^\d.]//g;
 
-my $ua = new LWP::UserAgent;
-
-$ua->agent("lwp-download/$version " . $ua->agent);
-$ua->env_proxy;
-
-my $req = new HTTP::Request GET => $url;
+my $ua = LWP::UserAgent->new(
+   agent => "lwp-download/$version ",
+   keep_alive => 1,
+   env_proxy => 1,
+);
 
 my $file;      # name of file we download into
 my $length;    # total number of bytes to download
@@ -84,11 +97,17 @@ $SIG{INT} = sub { die "Interrupted\n"; };
 
 $| = 1;  # autoflush
 
-my $res = $ua->request($req,
+my $res = $ua->request(HTTP::Request->new(GET => $url),
   sub {
-      unless($file) {
+      unless(defined $file) {
 	  my $res = $_[1];
-	  unless ($argfile) {
+
+	  my $directory;
+	  if (defined $argfile && -d $argfile) {
+	      ($directory, $argfile) = ($argfile, undef);
+	  }
+
+	  unless (defined $argfile) {
 	      # must find a suitable name to use.  First thing
 	      # to do is to look for the "Content-Disposition"
 	      # header defined by RFC1806.  This is also supported
@@ -98,6 +117,7 @@ my $res = $ua->request($req,
 		  $file = $1;
 		  $file =~ s/;$//;
 		  $file =~ s/^([\"\'])(.*)\1$/$2/;
+		  $file =~ s,.*[\\/],,;  # basename
 	      }
 
 	      # if this fails we try to make something from the URL
@@ -127,8 +147,26 @@ my $res = $ua->request($req,
 		  }
 	      }
 
+	      # validate that we don't have a harmful filename now.  The server
+	      # might try to trick us into doing something bad.
+	      if (!length($file) ||
+                  $file =~ s/([^a-zA-Z0-9\.\-\+\~])/sprintf "\\x%02x", ord($1)/ge)
+              {
+		  die "Will not save <$url> as \"$file\".\nPlease override file name on the command line.\n";
+	      }
+
+	      if (defined $directory) {
+	          require File::Spec;
+	          $file = File::Spec->catfile($directory, $file);
+	      }
+
 	      # Check if the file is already present
-	      if (-f $file && -t) {
+	      if (-l $file) {
+		  die "Will not save <$url> to link \"$file\".\nPlease override file name on the command line.\n";
+	      }
+	      elsif (-f _) {
+		  die "Will not save <$url> as \"$file\" without verification.\nEither run from terminal or override file name on the command line.\n"
+		      unless -t;
 		  $shown = 1;
 		  print "Overwrite $file? [y] ";
 		  my $ans = <STDIN>;
@@ -142,6 +180,9 @@ my $res = $ua->request($req,
 		      exit 1;
 		  }
 		  $shown = 0;
+	      }
+	      elsif (-e _) {
+		  die "Will not save <$url> as \"$file\".  Path exists.\n";
 	      }
 	      else {
 		  print "Saving to '$file'...\n";
@@ -227,8 +268,8 @@ if (fileno(FILE)) {
 
 # Did not manage to create any file
 print "\n" if $shown;
-if ($res->header("X-Died")) {
-    print "$progname: Aborted\n";
+if (my $xdied = $res->header("X-Died")) {
+    print "$progname: Aborted\n$xdied\n";
 }
 else {
     print "$progname: ", $res->status_line, "\n";

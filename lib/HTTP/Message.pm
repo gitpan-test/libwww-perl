@@ -1,10 +1,10 @@
 package HTTP::Message;
 
-# $Id: Message.pm,v 1.52 2004/11/30 12:00:22 gisle Exp $
+# $Id: Message.pm,v 1.56 2004/12/08 14:16:45 gisle Exp $
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.52 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.56 $ =~ /(\d+)\.(\d+)/);
 
 require HTTP::Headers;
 require Carp;
@@ -68,6 +68,7 @@ sub clone
     my $self  = shift;
     my $clone = HTTP::Message->new($self->headers,
 				   $self->content);
+    $clone->protocol($self->protocol);
     $clone;
 }
 
@@ -160,6 +161,7 @@ sub decoded_content
 {
     my($self, %opt) = @_;
     my $content_ref;
+    my $content_ref_iscopy;
 
     eval {
 
@@ -182,6 +184,12 @@ sub decoded_content
 		next unless $ce || $ce eq "identity";
 		if ($ce eq "gzip" || $ce eq "x-gzip") {
 		    require Compress::Zlib;
+		    unless ($content_ref_iscopy) {
+			# memGunzip is documented to destroy its buffer argument
+			my $copy = $$content_ref;
+			$content_ref = \$copy;
+			$content_ref_iscopy++;
+		    }
 		    $content_ref = \Compress::Zlib::memGunzip($$content_ref);
 		    die "Can't gunzip content" unless defined $$content_ref;
 		}
@@ -189,11 +197,44 @@ sub decoded_content
 		    require Compress::Bzip2;
 		    $content_ref = Compress::Bzip2::decompress($$content_ref);
 		    die "Can't bunzip content" unless defined $$content_ref;
+		    $content_ref_iscopy++;
 		}
 		elsif ($ce eq "deflate") {
 		    require Compress::Zlib;
-		    $content_ref = \Compress::Zlib::uncompress($$content_ref);
-		    die "Can't inflate content" unless defined $$content_ref;
+		    my $out = Compress::Zlib::uncompress($$content_ref);
+		    unless (defined $out) {
+			# "Content-Encoding: deflate" is supposed to mean the "zlib"
+                        # format of RFC 1950, but Microsoft got that wrong, so some
+                        # servers sends the raw compressed "deflate" data.  This
+                        # tries to inflate this format.
+			unless ($content_ref_iscopy) {
+			    # the $i->inflate method is documented to destroy its
+			    # buffer argument
+			    my $copy = $$content_ref;
+			    $content_ref = \$copy;
+			    $content_ref_iscopy++;
+			}
+
+			my($i, $status) = Compress::Zlib::inflateInit(
+			    WindowBits => -Compress::Zlib::MAX_WBITS(),
+                        );
+			my $OK = Compress::Zlib::Z_OK();
+			die "Can't init inflate object" unless $i && $status == $OK;
+			($out, $status) = $i->inflate($content_ref);
+			if ($status != Compress::Zlib::Z_STREAM_END()) {
+			    if ($status == $OK) {
+				$self->push_header("Client-Warning" =>
+				    "Content might be truncated; incomplete deflate stream");
+			    }
+			    else {
+				# something went bad, can't trust $out any more
+				$out = undef;
+			    }
+			}
+		    }
+		    die "Can't inflate content" unless defined $out;
+		    $content_ref = \$out;
+		    $content_ref_iscopy++;
 		}
 		elsif ($ce eq "compress" || $ce eq "x-compress") {
 		    die "Can't uncompress content";
@@ -201,10 +242,12 @@ sub decoded_content
 		elsif ($ce eq "base64") {  # not really C-T-E, but should be harmless
 		    require MIME::Base64;
 		    $content_ref = \MIME::Base64::decode($$content_ref);
+		    $content_ref_iscopy++;
 		}
 		elsif ($ce eq "quoted-printable") { # not really C-T-E, but should be harmless
 		    require MIME::QuotedPrint;
 		    $content_ref = \MIME::QuotedPrint::decode($$content_ref);
+		    $content_ref_iscopy++;
 		}
 		else {
 		    die "Don't know how to decode Content-Encoding '$ce'";
@@ -217,7 +260,16 @@ sub decoded_content
 	    $charset = lc($charset);
 	    if ($charset ne "none") {
 		require Encode;
-		$content_ref = \Encode::decode($charset, $$content_ref, Encode::FB_CROAK());
+		if (do{my $v = $Encode::VERSION; $v =~ s/_//g; $v} < 2.0901 &&
+		    !$content_ref_iscopy)
+		{
+		    # LEAVE_SRC did not work before Encode-2.0901
+		    my $copy = $$content_ref;
+		    $content_ref = \$copy;
+		    $content_ref_iscopy++;
+		}
+		$content_ref = \Encode::decode($charset, $$content_ref,
+					       Encode::FB_CROAK() | Encode::LEAVE_SRC());
 	    }
 	}
     };
@@ -529,7 +581,8 @@ add_content() will refuse to do anything.
 
 Returns the content with any C<Content-Encoding> undone and strings
 mapped to perl's Unicode strings.  If the C<Content-Encoding> or
-C<charset> of the message is unknown this method will croak.
+C<charset> of the message is unknown this method will fail by
+returning C<undef>.
 
 The following options can be specified.
 

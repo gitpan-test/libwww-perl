@@ -1,6 +1,6 @@
 package HTML::Formatter;
 
-# $Id: Formatter.pm,v 1.15 1997/07/03 06:50:11 aas Exp $
+# $Id: Formatter.pm,v 1.17 1997/10/12 20:27:13 aas Exp $
 
 =head1 NAME
 
@@ -26,7 +26,7 @@ L<HTML::FormatText>, L<HTML::FormatPS>, L<HTML::Element>
 
 =head1 COPYRIGHT
 
-Copyright (c) 1995 Gisle Aas. All rights reserved.
+Copyright (c) 1995-1997 Gisle Aas. All rights reserved.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
@@ -42,11 +42,28 @@ require HTML::Element;
 
 use strict;
 use Carp;
+use UNIVERSAL qw(can);
 
 sub new
 {
-    my $class = shift;
-    bless { }, $class;
+    my($class,%arg) = @_;
+    my $self = bless { $class->default_values }, $class;
+    $self->configure(\%arg) if scalar(%arg);
+    $self;
+}
+
+sub default_values
+{
+    ();
+}
+
+sub configure
+{
+    my($self, $arg) = @_;
+    for (keys %$arg) {
+	warn "Unknown configure argument '$_'" if $^W;
+    }
+    $self;
 }
 
 sub format
@@ -59,10 +76,13 @@ sub format
 	    if (ref $node) {
 		my $tag = $node->tag;
 		my $func = $tag . '_' . ($start ? "start" : "end");
-		# We protect the call by eval, so we can recover if
+		# Use UNIVERSAL::can so that we can recover if
 		# a handler is not defined for the tag.
-		my $retval = eval { $self->$func($node); };
-		return $@ ? 1 : $retval;
+		if (can($self, $func)) {
+		    return $self->$func($node);
+		} else {
+		    return 1;
+		}
 	    } else {
 		$self->textflow($node);
 	    }
@@ -88,9 +108,8 @@ sub begin
     $self->{font_size}     = [3];   # last element is current size
     $self->{basefont_size} = [3];
 
-    $self->{makers} = [];           # last element is current marker
-    $self->{vspace} = undef;        # vertical space
-    $self->{eat_leading_space} = 0;
+    $self->{markers} = [];          # last element is current marker
+    $self->{vspace} = undef;        # vertical space (dimension)
 
     $self->{output} = [];
 }
@@ -140,7 +159,6 @@ sub br_start
 {
     my $self = shift;
     $self->vspace(0);
-    $self->eat_leading_space;
 
 }
 
@@ -148,7 +166,6 @@ sub hr_start
 {
     my $self = shift;
     $self->vspace(1);
-    $self->eat_leading_space;
 }
 
 sub img_start
@@ -298,7 +315,6 @@ sub p_start
 {
     my $self = shift;
     $self->vspace(1);
-    $self->eat_leading_space;
     1;
 }
 
@@ -333,7 +349,6 @@ sub blockquote_start
 {
     my $self = shift;
     $self->vspace(1);
-    $self->eat_leading_space;
     $self->adjust_lm( +2 );
     $self->adjust_rm( -2 );
     1;
@@ -351,7 +366,6 @@ sub address_start
 {
     my $self = shift;
     $self->vspace(1);
-    $self->eat_leading_space;
     $self->i_start(@_);
     1;
 }
@@ -387,7 +401,6 @@ sub li_start
     my $self = shift;
     $self->bullet($self->{markers}[-1]);
     $self->adjust_lm(+2);
-    $self->eat_leading_space;
     1;
 }
 
@@ -453,7 +466,6 @@ sub dt_start
 {
     my $self = shift;
     $self->vspace(1);
-    $self->eat_leading_space;
     1;
 }
 
@@ -466,7 +478,6 @@ sub dd_start
     my $self = shift;
     $self->adjust_lm(+6);
     $self->vspace(0);
-    $self->eat_leading_space;
     1;
 }
 
@@ -486,25 +497,20 @@ sub textflow
 {
     my $self = shift;
     if ($self->{pre}) {
+	# strip leading and trailing newlines so that the <pre> tags 
+	# may be placed on lines of their own without causing extra
+	# vertical space as part of the preformatted text
+	$_[0] =~ s/\n$//;
+	$_[0] =~ s/^\n//;
 	$self->pre_out($_[0]);
     } else {
 	for (split(/(\s+)/, $_[0])) {
 	    next unless length $_;
-	    if ($self->{eat_leading_space}) {
-		$self->{eat_leading_space} = 0;
-		next if /^\s/;
-	    }
 	    $self->out($_);
 	}
     }
 }
 
-
-
-sub eat_leading_space
-{
-    shift->{eat_leading_space} = 1;
-}
 
 
 sub vspace

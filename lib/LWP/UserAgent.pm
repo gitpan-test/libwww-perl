@@ -1,13 +1,13 @@
 package LWP::UserAgent;
 
-# $Id: UserAgent.pm,v 2.26 2004/04/06 13:14:38 gisle Exp $
+# $Id: UserAgent.pm,v 2.28 2004/04/07 09:47:37 gisle Exp $
 
 use strict;
 use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%03d", q$Revision: 2.26 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 2.28 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -297,15 +297,8 @@ sub request
 	    my $method = uc($referral->method);
 	    unless ($method eq "GET" || $method eq "HEAD") {
 		$referral->method("GET");
-
-		# Clean content and all content related headers
 		$referral->content("");
-		my %content_headers;
-		$referral->headers->scan(sub {
-		    my $h = shift;
-		    $content_headers{lc($h)}++ if $h =~ /^Content-/i;
-		});
-		$referral->remove_header(keys %content_headers);
+		$referral->remove_content_headers;
 	    }
 	}
 
@@ -543,7 +536,8 @@ sub redirect_ok
 sub credentials
 {
     my($self, $netloc, $realm, $uid, $pass) = @_;
-    @{ $self->{'basic_authentication'}{$netloc}{$realm} } = ($uid, $pass);
+    @{ $self->{'basic_authentication'}{lc($netloc)}{$realm} } =
+	($uid, $pass);
 }
 
 
@@ -552,7 +546,7 @@ sub get_basic_credentials
     my($self, $realm, $uri, $proxy) = @_;
     return if $proxy;
 
-    my $host_port = $uri->host_port;
+    my $host_port = lc($uri->host_port);
     if (exists $self->{'basic_authentication'}{$host_port}{$realm}) {
 	return @{ $self->{'basic_authentication'}{$host_port}{$realm} };
     }

@@ -1,12 +1,12 @@
 package HTTP::Headers;
 
-# $Id: Headers.pm,v 1.47 2003/10/23 19:11:32 uid39246 Exp $
+# $Id: Headers.pm,v 1.50 2004/04/06 22:30:52 gisle Exp $
 
 use strict;
 use Carp ();
 
 use vars qw($VERSION $TRANSLATE_UNDERSCORE);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.47 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.50 $ =~ /(\d+)\.(\d+)/);
 
 # The $TRANSLATE_UNDERSCORE variable controls whether '_' can be used
 # as a replacement for '-' in header field names.
@@ -71,6 +71,12 @@ sub header
     join(", ", @old);
 }
 
+sub clear
+{
+    my $self = shift;
+    %$self = ();
+}
+
 
 sub push_header
 {
@@ -97,6 +103,22 @@ sub remove_header
 	push(@values, ref($v) eq 'ARRAY' ? @$v : $v) if defined $v;
     }
     return @values;
+}
+
+sub remove_content_headers
+{
+    my $self = shift;
+    unless (defined(wantarray)) {
+	# simplify
+	delete @$self{grep /^content-/, keys %$self};
+	return;
+    }
+
+    my $c = ref($self)->new;
+    for my $f (grep /^content-/, keys %$self) {
+	$c->{$f} = delete $self->{$f};
+    }
+    $c;
 }
 
 
@@ -391,6 +413,18 @@ context the number of fields removed is returned.
 Note that if you pass in multiple field names then it is generally not
 possible to tell which of the returned values belonged to which field.
 
+=item $h->remove_content_headers
+
+This will remove all the headers used to describe the content of a
+message.  These header field names are prefixed with C<Content->.
+
+The return value is a new C<HTTP::Headers> object that contains the
+removed headers only.
+
+=item $h->clear
+
+This will remove all header fields.
+
 =item $h->scan( \&process_header_field )
 
 Apply a subroutine to each header field in turn.  The callback routine
@@ -595,7 +629,7 @@ header instead.
 
 =head1 COPYRIGHT
 
-Copyright 1995-2002 Gisle Aas.
+Copyright 1995-2004 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

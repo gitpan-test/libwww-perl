@@ -2,11 +2,10 @@
 
 use strict;
 use Test qw(plan ok);
-plan tests => 38;
+plan tests => 39;
 
-use HTTP::MessageParts;
+use HTTP::Message;
 use HTTP::Request::Common qw(POST);
-use Data::Dump qw(dump);
 
 my $m = HTTP::Message->new;
 
@@ -23,7 +22,8 @@ $m->add_content("foo");
 ok($m_clone->as_string, "\n");
 ok($m->headers_as_string, "Foo: 1\n");
 ok($m->header("Foo"), 1);
-ok($m->as_string, "Foo: 1\n\nfoo");
+ok($m->as_string, "Foo: 1\n\nfoo\n");
+ok($m->as_string("\r\n"), "Foo: 1\r\n\r\nfoo");
 ok(j($m->parts), "");
 
 $m->content_type("message/foo");

@@ -1,4 +1,4 @@
-# $Id: http11.pm,v 1.15 2001/04/29 04:40:58 gisle Exp $
+# $Id: http11.pm,v 1.19 2001/05/02 05:14:14 gisle Exp $
 #
 # You can tell LWP to use this module for 'http' requests by running
 # code like this before you make requests:
@@ -72,8 +72,10 @@ sub _new_socket
 					  Proto    => 'tcp',
 					  Timeout  => $timeout,
 					  KeepAlive => !!$conn_cache,
+					  SendTE    => 1,
 					  $self->_extra_sock_opts($host, $port),
 					 );
+
     unless ($sock) {
 	# IO::Socket::INET leaves additional error messages in $@
 	$@ =~ s/^.*?: //;
@@ -215,6 +217,7 @@ sub request
     }
 
     my $req_buf = $socket->format_request($method, $fullpath, @h);
+    #print "------\n$req_buf\n------\n";
 
     # XXX need to watch out for write timeouts
     {
@@ -343,7 +346,7 @@ sub request
 	{
 	    $n = $socket->read_entity_body($buf, $size);
 	    die "Can't read entity body: $!" unless defined $n;
-	    redo READ if $n eq "0E0";
+	    redo READ if $n == -1;
 	}
 	$complete++ if !$n;
         return \$buf;

@@ -11,7 +11,7 @@ my $req = HTTP::Request->new(GET => "http://www.google.com");
 my $res = $ua->request($req);
 
 $res = $ua->request($req);
-#print $res->as_string;
+print $res->as_string;
 
 print $res->content_type, "\n";
 print scalar($res->header("Content-type")), "\n";
@@ -30,9 +30,7 @@ $f->value("q", "LWP");
 
 $req = $f->click("btnI");
 print $req->as_string;
-
 $res = $ua->simple_request($req);
-
 print $res->as_string;
 
 print "not " unless $res->code == 302 && $res->header("Location") eq "http://www.linpro.no/lwp/";

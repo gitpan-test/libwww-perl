@@ -1,6 +1,6 @@
 package Net::HTTP;
 
-# $Id: HTTP.pm,v 1.27 2001/04/29 06:14:10 gisle Exp $
+# $Id: HTTP.pm,v 1.31 2001/05/05 13:40:34 gisle Exp $
 
 require 5.005;  # 4-arg substr
 
@@ -12,6 +12,22 @@ require IO::Socket::INET;
 @ISA=qw(IO::Socket::INET);
 
 my $CRLF = "\015\012";   # "\r\n" is not portable
+
+my $zlib_ok;
+{
+    # Try to load Compress::Zlib.
+    # It might be a better idea to load this on demand the first time
+    # the 'send_te' option is turned on.
+    local $@;
+    local $SIG{__DIE__};
+
+    eval {
+	require Compress::Zlib;
+	Compress::Zlib->VERSION(1.10);
+	$zlib_ok++;
+    };
+    #warn $@ if $@ && $^W;
+}
 
 sub configure {
     my($self, $cnf) = @_;
@@ -33,6 +49,7 @@ sub configure {
     $http_version = "1.1" unless defined $http_version;
     my $peer_http_version = delete $cnf->{PeerHTTPVersion};
     $peer_http_version = "1.0" unless defined $peer_http_version;
+    my $send_te = delete $cnf->{SendTE};
 
     my $sock = $self->SUPER::configure($cnf);
     if ($sock) {
@@ -42,6 +59,7 @@ sub configure {
 	}
 	$sock->host($host);
 	$sock->keep_alive($keep_alive);
+	$sock->send_te($send_te);
 	$sock->http_version($http_version);
 	$sock->peer_http_version($peer_http_version);
 
@@ -61,6 +79,13 @@ sub keep_alive {
     my $self = shift;
     my $old = ${*$self}{'http_keep_alive'};
     ${*$self}{'http_keep_alive'} = shift if @_;
+    $old;
+}
+
+sub send_te {
+    my $self = shift;
+    my $old = ${*$self}{'http_send_te'};
+    ${*$self}{'http_send_te'} = shift if @_;
     $old;
 }
 
@@ -105,7 +130,7 @@ sub format_request {
 
     my @h;
     my @connection;
-    my %given = (host => 0, "content-length" => 0);
+    my %given = (host => 0, "content-length" => 0, "te" => 0);
     while (@_) {
 	my($k, $v) = splice(@_, 0, 2);
 	my $lc_k = lc($k);
@@ -124,12 +149,22 @@ sub format_request {
     }
 
     my @h2;
+    if ($given{te}) {
+	push(@connection, "TE") unless grep lc($_) eq "te", @connection;
+    }
+    elsif ($self->send_te && $zlib_ok) {
+	# gzip is less wanted since the Compress::Zlib interface for
+	# it does not really allow chunked decoding to take place easily.
+	push(@h2, "TE: deflate,gzip;q=0.3");
+	push(@connection, "TE");
+    }
+
     unless (grep lc($_) eq "close", @connection) {
 	if ($self->keep_alive) {
 	    if ($peer_ver eq "1.0") {
 		# from looking at Netscape's headers
 		push(@h2, "Keep-Alive: 300");
-		push(@connection, "Keep-Alive");
+		unshift(@connection, "Keep-Alive");
 	    }
 	}
 	else {
@@ -137,7 +172,7 @@ sub format_request {
 	}
     }
     push(@h2, "Connection: " . join(", ", @connection)) if @connection;
-    push(@h2, "Host: ${*$self}{'http_host'}")unless $given{host};
+    push(@h2, "Host: ${*$self}{'http_host'}") unless $given{host};
 
     return join($CRLF, "$method $uri HTTP/$ver", @h2, @h, "", $content);
 }
@@ -148,19 +183,30 @@ sub write_request {
     print $self $self->format_request(@_);
 }
 
+sub format_chunk {
+    my $self = shift;
+    return $_[0] unless defined($_[0]) && length($_[0]);
+    return hex(length($_[0])) . $CRLF . $_[0] . $CRLF;
+}
+
 sub write_chunk {
     my $self = shift;
-    return unless defined($_[0]) && length($_[0]);
+    return 1 unless defined($_[0]) && length($_[0]);
     print $self hex(length($_[0])), $CRLF, $_[0], $CRLF;
 }
 
-sub write_chunk_eof {
+sub format_chunk_eof {
     my $self = shift;
     my @h;
     while (@_) {
 	push(@h, sprintf "%s: %s$CRLF", splice(@_, 0, 2));
     }
-    print $self "0$CRLF", @h, $CRLF;
+    return join("", "0$CRLF", @h, $CRLF);
+}
+
+sub write_chunk_eof {
+    my $self = shift;
+    print $self $self->format_chunk_eof(@_);
 }
 
 sub xread {
@@ -266,7 +312,7 @@ sub read_response_headers {
 	    $content_length = $headers[$i+1];
 	}
     }
-    ${*$self}{'http_te'} = join("", @te);
+    ${*$self}{'http_te'} = join(",", @te);
     ${*$self}{'http_content_length'} = $content_length;
     ${*$self}{'http_first_body'}++;
     delete ${*$self}{'http_trailers'};
@@ -294,17 +340,18 @@ sub read_entity_body {
 	}
 	elsif (my $te = ${*$self}{'http_te'}) {
 	    my @te = split(/\s*,\s*/, $te);
-	    die "Chunked must be last Transfer-Encoding '$te'" unless pop(@te) eq "chunked";
+	    die "Chunked must be last Transfer-Encoding '$te'"
+		unless pop(@te) eq "chunked";
 
 	    for (@te) {
-		if ($_ eq "deflate") {
-		    require Compress::Zlib;
+		if ($_ eq "deflate" && $zlib_ok) {
+		    #require Compress::Zlib;
 		    my $i = Compress::Zlib::inflateInit();
 		    die "Can't make inflator" unless $i;
 		    $_ = sub { scalar($i->inflate($_[0])) }
 		}
-		elsif ($_ eq "gzip") {
-		    require Compress::Zlib;
+		elsif ($_ eq "gzip" && $zlib_ok) {
+		    #require Compress::Zlib;
 		    my @buf;
 		    $_ = sub {
 			push(@buf, $_[0]);
@@ -341,6 +388,11 @@ sub read_entity_body {
     }
 
     if (defined $chunked) {
+	# The state encoded in $chunked is:
+	#   $chunked == 0:   read CRLF after chunk, then chunk header
+        #   $chunked == -1:  read chunk header
+	#   $chunked > 0:    bytes left in current chunk to read
+
 	if ($chunked <= 0) {
 	    my $line = my_readline($self);
 	    if ($chunked == 0) {
@@ -355,19 +407,19 @@ sub read_entity_body {
 		$$buf_ref = "";
 
 		my $n = 0;
-		if (my $transforms = ${*$self}{'http_te2'}) {
+		if (my $transforms = delete ${*$self}{'http_te2'}) {
 		    for (@$transforms) {
 			$$buf_ref = &$_($$buf_ref, 1);
 		    }
 		    $n = length($$buf_ref);
 		}
 
-		# in case somebody tries to read more
+		# in case somebody tries to read more, make sure we continue
+		# to return EOF
 		delete ${*$self}{'http_chunked'};
 		${*$self}{'http_bytes'} = 0;
 
 		return $n;
-
 	    }
 	}
 
@@ -378,14 +430,15 @@ sub read_entity_body {
 
 	${*$self}{'http_chunked'} = $chunked - $n;
 
-	if (my $transforms = ${*$self}{'http_te2'}) {
-	    for (@$transforms) {
-		$$buf_ref = &$_($$buf_ref, 0);
+	if ($n > 0) {
+	    if (my $transforms = ${*$self}{'http_te2'}) {
+		for (@$transforms) {
+		    $$buf_ref = &$_($$buf_ref, 0);
+		}
+		$n = length($$buf_ref);
+		$n = -1 if $n == 0;
 	    }
-	    $n = length($$buf_ref);
-	    $n = "0E0" if $n == 0;
 	}
-
 	return $n;
     }
     elsif (defined $bytes) {
@@ -396,6 +449,7 @@ sub read_entity_body {
 	my $n = $bytes;
 	$n = $size if $size && $size < $n;
 	$n = my_read($self, $$buf_ref, $n);
+	return undef unless defined $n;
 	${*$self}{'http_bytes'} = $bytes - $n;
 	return $n;
     }
@@ -460,6 +514,7 @@ C<IO::Socket::INET> as well as these:
 
   Host:            Initial host attribute value
   KeepAlive:       Initial keep_alive attribute value
+  SendTE:          Initial send_te attribute_value
   HTTPVersion:     Initial http_version attribute value
   PeerHTTPVersion: Initial peer_http_version attribute value
 
@@ -471,11 +526,19 @@ should not be set to an empty string (or C<undef>).
 =item $s->keep_alive
 
 Get/set the I<keep-alive> value.  If this value is TRUE then the
-request will sendt with headers indicating that the server should try
+request will be sent with headers indicating that the server should try
 to keep the connection open so that multiple requests can be sent.
 
 The actual headers set will depend on the value of the C<http_version>
 and C<peer_http_version> attributes.
+
+=item $s->send_te
+
+Get/set the a value indicating if the request will be sent with a "TE"
+header to indicate the transfer encodings that the server chose to
+use.  If the C<Compress::Zlib> module is installed then this will
+annouce that this client accept both the I<deflate> and I<gzip>
+encodings.
 
 =item $s->http_version
 
@@ -514,6 +577,10 @@ body data.
 
 Returns true if successful.
 
+=item $s->format_chunk($data)
+
+Returns the string to be written for the given chunk of data.
+
 =item $s->write_chunk_eof(%trailers)
 
 Will write eof marker for chunked data and optional trailers.  Note
@@ -521,6 +588,10 @@ that trailers should not really be used unless is was signaled
 with a C<Trailer> header.
 
 Returns true if successful.
+
+=item $s->format_chunk_eof(%trailers)
+
+Returns the string to be written for signaling EOF.
 
 =item ($code, $mess, %headers) = $s->read_response_headers
 
@@ -532,6 +603,10 @@ Reads chunks of the entity body content.  Basically the same interface
 as for read() and sysread(), but buffer offset is not supported yet.
 This method should only be called after a successful
 read_response_headers() call.
+
+The return value will be C<undef> on errors, 0 on EOF, -1 if no data
+could be returned this time, and otherwise the number of bytes added
+to $buf.
 
 =item %headers = $s->get_trailers
 

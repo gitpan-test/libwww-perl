@@ -1,5 +1,5 @@
 #
-# $Id: Headers.pm,v 1.33 1998/03/30 20:11:00 aas Exp $
+# $Id: Headers.pm,v 1.36 1998/04/10 14:51:22 aas Exp $
 
 package HTTP::Headers;
 
@@ -30,7 +30,7 @@ The following methods are available:
 
 use strict;
 use vars qw($VERSION $TRANSLATE_UNDERSCORE);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
 
 use Carp ();
 
@@ -92,16 +92,13 @@ attribute-value pairs as parameters to the constructor.  I<E.g.>:
 sub new
 {
     my($class) = shift;
-    my $self = bless {
-	'_header'   => { },
-    }, $class;
-
+    my $self = bless {}, $class;
     $self->header(@_); # set up initial headers
     $self;
 }
 
 
-=item $h->header($field [=> $val],...)
+=item $h->header($field [=> $value],...)
 
 Get or set the value of a header.  The header field name is not case
 sensitive.  To make the life easier for perl users who wants to avoid
@@ -109,14 +106,16 @@ quoting before the => operator, you can use '_' as a synonym for '-'
 in header names (this behaviour can be suppressed by setting
 $HTTP::Headers::TRANSLATE_UNDERSCORE to a FALSE value).
 
-The value argument may be a scalar or a reference to a list of
-scalars. If the value argument is not defined, then the header is not
-modified.
+The header() method accepts multiple ($field => $value) pairs, so you
+can update several fields with a single invocation.
 
-The header() method accepts multiple ($field => $value) pairs.
+The optional $value argument may be a scalar or a reference to a list
+of scalars. If the $value argument is undefined or not given, then the
+header is not modified.
 
-The list of previous values for the last $field is returned.  Only the
-first header value is returned in scalar context.
+The old value of the last of the $field values is returned.
+Multi-valued fields will be concatenated with "," as separator in
+scalar context.
 
  $header->header(MIME_Version => '1.0',
 		 User_Agent   => 'My-Web-Client/0.01');
@@ -133,7 +132,9 @@ sub header
     while (($field, $val) = splice(@_, 0, 2)) {
 	@old = $self->_header($field, $val);
     }
-    wantarray ? @old : $old[0];
+    return @old if wantarray;
+    return $old[0] if @old <= 1;
+    join(", ", @old);
 }
 
 sub _header
@@ -142,9 +143,7 @@ sub _header
     $field =~ tr/_/-/ if $TRANSLATE_UNDERSCORE;
 
     # $push is only used interally sub push_header
-
-    Carp::croak('Need a field name') unless defined $field;
-    Carp::croak('Too many parameters') if @_ > 4;
+    Carp::croak('Need a field name') unless length($field);
 
     my $lc_field = lc $field;
     unless(defined $standard_case{$lc_field}) {
@@ -153,23 +152,19 @@ sub _header
 	$standard_case{$lc_field} = $field;
     }
 
-    my $this_header = \@{$self->{'_header'}{$lc_field}};
+    my $h = $self->{$lc_field};
+    my @old = ref($h) ? @$h : (defined($h) ? ($h) : ());
 
-    my @old = ();
-    if (!$push && defined $this_header) {
-	@old = @$this_header;  # save it so we can return it
-    }
     if (defined $val) {
-	@$this_header = () unless $push;
+	my @new = $push ? @old : ();
 	if (!ref($val)) {
-	    # scalar: create list with single value
-	    push(@$this_header, $val);
+	    push(@new, $val);
 	} elsif (ref($val) eq 'ARRAY') {
-	    # list: copy list
-	    push(@$this_header, @$val);
+	    push(@new, @$val);
 	} else {
 	    Carp::croak("Unexpected field value $val");
 	}
+	$self->{$lc_field} = @new > 1 ? \@new : $new[0];
     }
     @old;
 }
@@ -203,14 +198,17 @@ recommended "Good Practice" order.
 sub scan
 {
     my($self, $sub) = @_;
-    my $field;
-    foreach $field (sort _header_cmp keys %{$self->{'_header'}} ) {
-	my $list = $self->{'_header'}{$field};
-	if (defined $list) {
+    my $key;
+    foreach $key (sort _header_cmp keys %$self) {
+        next if $key =~ /^_/;
+	my $vals = $self->{$key};
+	if (ref($vals)) {
 	    my $val;
-	    for $val (@$list) {
-		&$sub($standard_case{$field} || $field, $val);
+	    for $val (@$vals) {
+		&$sub($standard_case{$key} || $key, $val);
 	    }
+	} else {
+	    &$sub($standard_case{$key} || $key, $vals);
 	}
     }
 }
@@ -458,7 +456,7 @@ sub remove_header
     my $field;
     foreach $field (@fields) {
 	$field =~ tr/_/-/ if $TRANSLATE_UNDERSCORE;
-	delete $self->{'_header'}{lc $field};
+	delete $self->{lc $field};
     }
 }
 
@@ -494,7 +492,7 @@ sub client_date         { shift->_date_header('Client-Date',         @_); }
 
 sub content_type      {
   my $ct = (shift->_header('Content-Type', @_))[0];
-  return '' unless defined $ct;
+  return '' unless defined($ct) && length($ct);
   my @ct = split(/\s*;\s*/, lc($ct));
   wantarray ? @ct : $ct[0];
 }

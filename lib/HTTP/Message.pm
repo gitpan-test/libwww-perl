@@ -1,10 +1,10 @@
 package HTTP::Message;
 
-# $Id: Message.pm,v 1.30 2003/10/24 10:25:16 gisle Exp $
+# $Id: Message.pm,v 1.34 2004/04/06 10:44:31 gisle Exp $
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
 
 require HTTP::Headers;
 require Carp;
@@ -19,6 +19,7 @@ sub new
     my($class, $header, $content) = @_;
     if (defined $header) {
 	Carp::croak("Bad header argument") unless ref $header;
+        $header = HTTP::Headers->new(@$header) if ref($header) eq "ARRAY";
 	$header = $header->clone;
     }
     else {
@@ -35,37 +36,63 @@ sub new
 sub clone
 {
     my $self  = shift;
-    my $clone = HTTP::Message->new($self->{'_headers'}, $self->{'_content'});
+    my $clone = HTTP::Message->new($self->headers,
+				   $self->content);
     $clone;
 }
 
 
 sub protocol { shift->_elem('_protocol',  @_); }
-sub content  { shift->_elem('_content',  @_); }
+
+sub content  {
+    my $self = shift;
+    if (defined(wantarray) && !exists $self->{_content}) {
+	$self->_content;
+    }
+    my $old = $self->{_content};
+    if (@_) {
+	$self->{_content} = shift;
+	delete $self->{_parts};
+    }
+    $old;
+}
 
 
 sub add_content
 {
     my $self = shift;
+    $self->_content unless exists $self->{_content};
     if (ref($_[0])) {
 	$self->{'_content'} .= ${$_[0]};  # for backwards compatability
     }
     else {
 	$self->{'_content'} .= $_[0];
     }
+    delete $self->{_parts};
 }
 
 
 sub content_ref
 {
     my $self = shift;
+    $self->_content unless exists $self->{_content};
+    delete $self->{_parts};
     \$self->{'_content'};
 }
 
 
 sub as_string
 {
-    "";  # To be overridden in subclasses
+    my($self, $eol) = @_;
+    $eol = "\n" unless defined $eol;
+
+    # The calculation of content might update the headers
+    # so we need to do that first.
+    my $content = $self->content;
+
+    return join("", $self->{'_headers'}->as_string($eol),
+		    $eol,
+		    $content);
 }
 
 

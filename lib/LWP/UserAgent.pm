@@ -1,13 +1,13 @@
 package LWP::UserAgent;
 
-# $Id: UserAgent.pm,v 2.24 2003/11/21 11:48:13 gisle Exp $
+# $Id: UserAgent.pm,v 2.26 2004/04/06 13:14:38 gisle Exp $
 
 use strict;
 use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%03d", q$Revision: 2.24 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 2.26 $ =~ /(\d+)\.(\d+)/);
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -334,7 +334,7 @@ sub request
 	    $r = $r->previous;
 	}
 
-	return $response unless $self->redirect_ok($request, $response);
+	return $response unless $self->redirect_ok($referral, $response);
 	return $self->request($referral, $arg, $size, $response);
 
     }
@@ -530,7 +530,8 @@ sub redirect_ok
       @{ $self->requests_redirectable || [] };
     
     if ($new_request->url->scheme eq 'file') {
-      LWP::Debug::trace("Can't redirect to a file:// URL!");
+      $response->header("Client-Warning" =>
+			"Can't redirect to a file:// URL!");
       return 0;
     }
     
@@ -1310,7 +1311,7 @@ specialized user agents based on C<LWP::UserAgent>.
 
 =head1 COPYRIGHT
 
-Copyright 1995-2003 Gisle Aas.
+Copyright 1995-2004 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

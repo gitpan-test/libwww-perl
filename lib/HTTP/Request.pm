@@ -1,10 +1,10 @@
 package HTTP::Request;
 
-# $Id: Request.pm,v 1.34 2003/10/24 10:25:16 gisle Exp $
+# $Id: Request.pm,v 1.36 2004/04/06 10:44:31 gisle Exp $
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.36 $ =~ /(\d+)\.(\d+)/);
 
 use strict;
 
@@ -70,24 +70,17 @@ sub uri
 
 sub as_string
 {
-    my $self = shift;
-    my @result;
-    #push(@result, "---- $self -----");
-    my $req_line = $self->method || "[NO METHOD]";
+    my($self, $eol) = @_;
+    $eol = "\n" unless defined $eol;
+
+    my $req_line = $self->method || "-";
     my $uri = $self->uri;
-    $uri = (defined $uri) ? $uri->as_string : "[NO URI]";
+    $uri = (defined $uri) ? $uri->as_string : "-";
     $req_line .= " $uri";
     my $proto = $self->protocol;
     $req_line .= " $proto" if $proto;
 
-    push(@result, $req_line);
-    push(@result, $self->headers_as_string);
-    my $content = $self->content;
-    if (defined $content) {
-	push(@result, $content);
-    }
-    #push(@result, ("-" x 40));
-    join("\n", @result, "");
+    return join($eol, $req_line, $self->SUPER::as_string($eol));
 }
 
 

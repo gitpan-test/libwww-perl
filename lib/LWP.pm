@@ -1,9 +1,9 @@
 #
-# $Id: LWP.pm,v 1.109 2001/09/17 19:25:17 gisle Exp $
+# $Id: LWP.pm,v 1.112 2001/10/26 23:24:03 gisle Exp $
 
 package LWP;
 
-$VERSION = "5.5397";
+$VERSION = "5.60";
 sub Version { $VERSION; }
 
 require 5.004;
@@ -402,7 +402,8 @@ encoded in the URL.  Failed logins return an UNAUTHORIZED response with
 for HTTP.
 
 The library supports ftp ASCII transfer mode by specifying the "type=a"
-parameter in the URL.
+parameter in the URL. It also supports transfer of ranges for FTP transfers
+using the "Range" header.
 
 Directory listings are by default returned unprocessed (as returned
 from the ftp server) with the content media type reported to be

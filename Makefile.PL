@@ -1,7 +1,7 @@
 # This -*- perl -*- script writes the Makefile for libwww-perl
-# $Id: Makefile.PL,v 1.56 2001/04/29 06:14:51 gisle Exp $
+# $Id: Makefile.PL,v 1.59 2001/10/26 22:15:08 gisle Exp $
 
-require 5.004;
+require 5.005;
 use strict;
 use ExtUtils::MakeMaker;
 use Config;
@@ -41,7 +41,7 @@ my $some_time_ago = sprintf "%04d-%02d-%02d",
                             sub { ($_[5]+1900, $_[4]+1, $_[3])}->(localtime(time - 45 * 24*60*60));
 if ($some_time_ago lt $release_date) {
     # Check if we have internet connection
-    require IO::Socket::INET;
+    require IO::Socket;
     my $s = IO::Socket::INET->new(PeerAddr => "www.google.com:80",
 				  Timeout  => 10,
 				 );
@@ -163,7 +163,7 @@ EOT
 print "Checking for Net::FTP......";
 eval {
     require Net::FTP;
-    Net::FTP->VERSION('2.00');
+    Net::FTP->VERSION('2.58');
 };
 if ($@) {
     print " failed\n";
@@ -218,7 +218,7 @@ WriteMakefile(
    EXE_FILES     => [ map {"bin/$_"} @programs_to_install ],
    PREREQ_PM     => { 'URI'              => "1.10",
                       'MIME::Base64'     => "2.1",
-                      'Net::FTP'         => "2.4",
+                      'Net::FTP'         => "2.58",
                       'HTML::HeadParser' => 0,
                       'Digest::MD5'      => 0,
                      },

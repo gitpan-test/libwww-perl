@@ -1,4 +1,4 @@
-# $Id: Protocol.pm,v 1.31 1998/01/06 09:58:38 aas Exp $
+# $Id: Protocol.pm,v 1.33 1999/03/19 21:46:41 gisle Exp $
 
 package LWP::Protocol;
 
@@ -38,11 +38,12 @@ The following methods and functions are provided:
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
 
 use strict;
 use Carp ();
-use HTTP::Status 'RC_INTERNAL_SERVER_ERROR';
+use HTTP::Status ();
+use HTTP::Response;
 require HTML::HeadParser;
 
 my %ImplementedBy = (); # scheme => classname
@@ -117,7 +118,7 @@ sub implementor
 	# try to autoload it
 	eval "require $ic";
 	if ($@) {
-	    if ($@ =~ /^Can't locate/) { #' #emacs get confused by '
+	    if ($@ =~ /Can't locate/) { #' #emacs get confused by '
 		$ic = '';
 	    } else {
 		die "$@\n";
@@ -221,8 +222,8 @@ sub collect
     elsif (!ref($arg)) {
 	# filename
 	open(OUT, ">$arg") or
-	    return new HTTP::Response RC_INTERNAL_SERVER_ERROR,
-			  "Cannot write to '$arg': $!";
+	    return HTTP::Response->new(&HTTP::Status::RC_INTERNAL_SERVER_ERROR,
+			  "Cannot write to '$arg': $!");
         binmode(OUT);
         local($\) = ""; # ensure standard $OUTPUT_RECORD_SEPARATOR
 	while ($content = &$collector, length $$content) {
@@ -259,8 +260,8 @@ sub collect
 	}
     }
     else {
-	return new HTTP::Response RC_INTERNAL_SERVER_ERROR,
-				  "Unexpected collect argument  '$arg'";
+	return HTTP::Response->new(&HTTP::Status::RC_INTERNAL_SERVER_ERROR,
+				  "Unexpected collect argument  '$arg'");
     }
     $response;
 }

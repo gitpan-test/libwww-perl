@@ -1,3 +1,18 @@
+2003-11-21   Gisle Aas <gisle@ActiveState.com>
+
+    Release 5.76
+    
+    Revised handling of redirects.
+       - clear our content and content headers if we
+         rewrite request as GET
+       - pass $response to redirect_ok()
+
+    Support cpan:-URLs.  Try 'lwp-download cpan:src/latest.tar.gz' :)
+
+    Fix test failure in 't/html/form.t' for perl5.005.
+
+
+
 2003-10-26   Gisle Aas <gisle@ActiveState.com>
 
     Release 5.75

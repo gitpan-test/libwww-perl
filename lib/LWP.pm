@@ -1,9 +1,9 @@
 #
-# $Id: LWP.pm,v 1.133 2003/10/23 19:20:00 uid39246 Exp $
+# $Id: LWP.pm,v 1.135 2003/11/21 14:43:54 gisle Exp $
 
 package LWP;
 
-$VERSION = "5.75";
+$VERSION = "5.76";
 sub Version { $VERSION; }
 
 require 5.005;
@@ -495,6 +495,23 @@ Example:
   $req = HTTP::Request->new(POST => 'mailto:libwww@perl.org');
   $req->header(Subject => "subscribe");
   $req->content("Please subscribe me to the libwww-perl mailing list!\n");
+
+=head2 CPAN Requests
+
+URLs with scheme C<cpan:> are redirected to the a suitable CPAN
+mirror.  If you have your own local mirror of CPAN you might tell LWP
+to use it for C<cpan:> URLs by an assignment like this:
+
+  $LWP::Protocol::cpan::CPAN = "file:/local/CPAN/";
+
+Suitable CPAN mirrors are also picked up from the configuration for
+the CPAN.pm, so if you have used that module a suitable mirror should
+be picked automatically.  If neither of these apply, then a redirect
+to the generic CPAN http location is issued.
+
+Example request to download the newest perl:
+
+  $req = HTTP::Request->new(GET => "cpan:src/latest.tar.gz");
 
 
 =head1 OVERVIEW OF CLASSES AND PACKAGES

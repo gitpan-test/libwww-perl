@@ -15,7 +15,7 @@ $Config{'startperl'} -w
 !GROK!THIS!
 
 print OUT <<'!NO!SUBS!';
-# $Id: lwp-download.PL,v 1.7.2.1 1998/10/12 12:23:48 aas Exp $
+# $Id: lwp-download.PL,v 1.8 1998/11/19 21:44:58 aas Exp $
 
 =head1 NAME
 

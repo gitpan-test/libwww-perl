@@ -1,5 +1,5 @@
 #
-# $Id: http.pm,v 1.43.2.1 1998/10/12 10:21:57 aas Exp $
+# $Id: http.pm,v 1.44 1998/11/19 21:45:01 aas Exp $
 
 package LWP::Protocol::http;
 

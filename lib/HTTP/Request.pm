@@ -1,5 +1,5 @@
 #
-# $Id: Request.pm,v 1.23.2.1 1998/09/11 11:52:16 aas Exp $
+# $Id: Request.pm,v 1.24 1998/11/19 21:45:00 aas Exp $
 
 package HTTP::Request;
 
@@ -39,7 +39,7 @@ The following additional methods are available:
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.23.2.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 use strict;
 

@@ -1,5 +1,5 @@
 #
-# $Id: MediaTypes.pm,v 1.22.2.1 1998/09/11 11:05:01 aas Exp $
+# $Id: MediaTypes.pm,v 1.23 1998/11/19 21:45:00 aas Exp $
 
 package LWP::MediaTypes;
 
@@ -32,7 +32,7 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(guess_media_type media_suffix);
 @EXPORT_OK = qw(add_type add_encoding);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.22.2.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
 
 require LWP::Debug;
 use strict;

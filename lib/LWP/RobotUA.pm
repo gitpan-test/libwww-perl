@@ -1,10 +1,10 @@
-# $Id: RobotUA.pm,v 1.13.2.1 1998/10/12 12:01:44 aas Exp $
+# $Id: RobotUA.pm,v 1.14 1998/11/19 21:45:00 aas Exp $
 
 package LWP::RobotUA;
 
 require LWP::UserAgent;
 @ISA = qw(LWP::UserAgent);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.13.2.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 require WWW::RobotRules;
 require HTTP::Request;

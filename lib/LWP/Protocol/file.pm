@@ -1,5 +1,5 @@
 #
-# $Id: file.pm,v 1.16.2.1 1998/10/12 11:20:46 aas Exp $
+# $Id: file.pm,v 1.17 1998/11/19 21:45:01 aas Exp $
 
 package LWP::Protocol::file;
 

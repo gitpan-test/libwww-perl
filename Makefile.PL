@@ -1,5 +1,5 @@
 # This -*- perl -*- script writes the Makefile for libwww-perl
-# $Id: Makefile.PL,v 1.47.2.1 1998/10/12 12:45:48 aas Exp $
+# $Id: Makefile.PL,v 1.49 1998/11/19 20:27:10 aas Exp $
 
 require 5.004;
 use strict;
@@ -20,7 +20,7 @@ use vars qw($opt_n);
 unless (getopts("n")) {
     die "Usage: $0 [-n]\n";
 }
-@programs_to_install = () if $opt_n;
+@programs_to_install = () if $opt_n || grep /^LIB=/, @ARGV;
 
 
 # Check for non-standard modules that are used by this library.
@@ -105,19 +105,19 @@ EOT
     print " ok\n";
 }
 
-print "Checking for MD5 ..........";
+print "Checking for Digest::MD5 ..";
 eval {
-    require MD5;
+    require Digest::MD5;
 };
 if ($@) {
     print " failed\n";
     $missing_modules++;
     print <<EOT;
 $@
-The MD5 library is needed if you want to be able use the experimental
-"Digest Access Authentication" scheme.  Since very few servers
-implement this authentication scheme, you should normally not worry
-too much about this.
+The Digest::MD5 library is needed if you want to be able use the
+experimental "Digest Access Authentication" scheme.  Since very few
+servers implement this authentication scheme, you should normally not
+worry too much about this.
 
 EOT
 } else {

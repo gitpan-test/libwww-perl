@@ -1,5 +1,5 @@
 #
-# $Id: ftp.pm,v 1.24.2.1 1998/10/12 11:26:31 aas Exp $
+# $Id: ftp.pm,v 1.25 1998/11/19 21:45:01 aas Exp $
 
 # Implementation of the ftp protocol (RFC 959). We let the Net::FTP
 # package do all the dirty work.

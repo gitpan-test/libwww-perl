@@ -1,5 +1,5 @@
 #
-# $Id: mailto.pm,v 1.7.2.1 1998/10/12 10:54:49 aas Exp $
+# $Id: mailto.pm,v 1.8 1998/11/19 21:45:02 aas Exp $
 #
 # This module implements the mailto protocol.  It is just a simple
 # frontend to the Unix sendmail program.  This module should probably

@@ -8,7 +8,7 @@ if ($D eq 'daemon') {
 
     require HTTP::Daemon;
 
-    my $d = new HTTP::Daemon Timeout => 10;
+    my $d = HTTP::Daemon->new(Timeout => 10);
 
     print "Please to meet you at: <URL:", $d->url, ">\n";
     open(STDOUT, ">/dev/null");
@@ -133,7 +133,7 @@ sub httpd_get_file
     my %form = $r->url->query_form;
     my $file = $form{'name'};
     $c->send_file_response($file);
-    unlink($file);
+    unlink($file) if $file =~ /^test-/;
 }
 
 $req = new HTTP::Request GET => url("/file?name=$file", $base);

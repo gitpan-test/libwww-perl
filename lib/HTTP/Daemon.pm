@@ -1,4 +1,4 @@
-# $Id: Daemon.pm,v 1.19.2.1 1998/09/11 11:51:10 aas Exp $
+# $Id: Daemon.pm,v 1.20 1998/11/19 21:44:59 aas Exp $
 #
 
 use strict;
@@ -60,7 +60,7 @@ to the I<IO::Socket::INET> base class.
 
 use vars qw($VERSION @ISA $PROTO $DEBUG);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.19.2.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.20 $ =~ /(\d+)\.(\d+)/);
 
 use IO::Socket ();
 @ISA=qw(IO::Socket::INET);
@@ -93,7 +93,7 @@ sub new
     my $host = $args{LocalAddr};
     unless ($host) {
 	require Sys::Hostname;
-	$host = Sys::Hostname::hostname();
+	$host = lc Sys::Hostname::hostname();
     }
     ${*$self}{'httpd_server_name'} = $host;
     $self;

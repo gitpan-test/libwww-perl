@@ -1,4 +1,4 @@
-# $Id: RobotRules.pm,v 1.16.2.2 1998/09/11 12:42:04 aas Exp $
+# $Id: RobotRules.pm,v 1.17 1998/11/19 21:45:02 aas Exp $
 
 package WWW::RobotRules;
 
@@ -46,7 +46,7 @@ The following methods are provided:
 
 =cut
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.16.2.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.17 $ =~ /(\d+)\.(\d+)/);
 sub Version { $VERSION; }
 
 use strict;

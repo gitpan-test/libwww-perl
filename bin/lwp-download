@@ -1,21 +1,6 @@
-use Config;
-use File::Basename qw(basename dirname);
-chdir(dirname($0));
-($file = basename($0)) =~ s/\.PL$//;
-$file =~ s/\.pl$//
-	if ($Config{'osname'} eq 'VMS' or
-	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
-open OUT,">$file" or die "Can't create $file: $!";
-chmod(0755, $file);
-print "Extracting $file (with variable substitutions)\n";
+#!/usr/bin/perl -w
 
-print OUT <<"!GROK!THIS!";
-$Config{'startperl'} -w
-
-!GROK!THIS!
-
-print OUT <<'!NO!SUBS!';
-# $Id: lwp-download.PL,v 1.10 1999/03/19 14:06:30 gisle Exp $
+# $Id: lwp-download,v 2.1 2002/01/03 02:09:24 gisle Exp $
 
 =head1 NAME
 
@@ -75,7 +60,7 @@ unless (getopts('a', \%opt)) {
 
 my $url = URI->new(shift || usage());
 my $argfile = shift;
-my $version = q$Revision: 1.10 $;
+my $version = q$Revision: 2.1 $;
 
 my $ua = new LWP::UserAgent;
 
@@ -119,7 +104,7 @@ my $res = $ua->request($req,
 		  my $rurl = $req ? $req->url : $url;
 		  
 		  $file = ($rurl->path_segments)[-1];
-		  unless (length $file) {
+		  if (!defined($file) || !length($file)) {
 		      $file = "index";
 		      my $suffix = media_suffix($res->content_type);
 		      $file .= ".$suffix" if $suffix;
@@ -255,4 +240,3 @@ sub usage
 {
     die "Usage: $progname [-a] <url> [<lpath>]\n";
 }
-!NO!SUBS!

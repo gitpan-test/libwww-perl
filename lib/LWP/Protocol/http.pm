@@ -1,4 +1,4 @@
-# $Id: http.pm,v 1.57 2001/10/26 18:08:02 gisle Exp $
+# $Id: http.pm,v 1.61 2001/11/17 02:10:28 gisle Exp $
 #
 
 package LWP::Protocol::http;
@@ -17,34 +17,6 @@ require LWP::Protocol;
 
 my $CRLF = "\015\012";
 
-{
-    package LWP::Protocol::MyHTTP;
-    use vars qw(@ISA);
-    @ISA = qw(Net::HTTP);
-
-    sub sysread {
-	my $self = shift;
-	if (my $timeout = ${*$self}{io_socket_timeout}) {
-	    die "read timeout" unless $self->can_read($timeout);
-	}
-	sysread($self, $_[0], $_[1], $_[2] || 0);
-    }
-
-    sub can_read {
-	my($self, $timeout) = @_;
-	my $fbits = '';
-	vec($fbits, fileno($self), 1) = 1;
-	my $nfound = select($fbits, undef, undef, $timeout);
-	die "select failed: $!" unless defined $nfound;
-	return $nfound > 0;
-    }
-
-    sub ping {
-	my $self = shift;
-	!$self->can_read(0);
-    }
-}
-
 sub _new_socket
 {
     my($self, $host, $port, $timeout) = @_;
@@ -60,14 +32,14 @@ sub _new_socket
     }
 
     local($^W) = 0;  # IO::Socket::INET can be noisy
-    my $sock = $self->_conn_class->new(PeerAddr => $host,
-				       PeerPort => $port,
-				       Proto    => 'tcp',
-				       Timeout  => $timeout,
-				       KeepAlive => !!$conn_cache,
-				       SendTE    => 1,
-				       $self->_extra_sock_opts($host, $port),
-				      );
+    my $sock = $self->socket_class->new(PeerAddr => $host,
+					PeerPort => $port,
+					Proto    => 'tcp',
+					Timeout  => $timeout,
+					KeepAlive => !!$conn_cache,
+					SendTE    => 1,
+					$self->_extra_sock_opts($host, $port),
+				       );
 
     unless ($sock) {
 	# IO::Socket::INET leaves additional error messages in $@
@@ -81,9 +53,10 @@ sub _new_socket
     $sock;
 }
 
-sub _conn_class
+sub socket_class
 {
-    "LWP::Protocol::MyHTTP";
+    my $self = shift;
+    (ref($self) || $self) . "::Socket";
 }
 
 sub _extra_sock_opts  # to be overridden by subclass
@@ -111,7 +84,7 @@ sub _fixup_header
     # Extract 'Host' header
     my $hhost = $url->authority;
     $hhost =~ s/^([^\@]*)\@//;  # get rid of potential "user:pass@"
-    $h->header('Host' => $hhost) unless defined $h->header('Host');
+    $h->init_header('Host' => $hhost);
 
     # add authorization header if we need them.  HTTP URLs do
     # not really support specification of user and password, but
@@ -182,7 +155,9 @@ sub request
     $self->_check_sock($request, $socket);
 
     my @h;
-    my $request_headers = $request->headers;
+    my $request_headers = $request->headers->clone;
+    $self->_fixup_header($request_headers, $url, $proxy);
+
     $request_headers->scan(sub {
 			       my($k, $v) = @_;
 			       $v =~ s/\n/ /g;
@@ -344,9 +319,10 @@ sub request
 	return $response;
     }
 
-    #$response->remove_header('Transfer-Encoding');
-    $response->push_header('Client-Warning', 'LWP HTTP/1.1 support is experimental');
-    $response->push_header('Client-Request-Num', ++${*$socket}{'myhttp_req_count'});
+    if (my @te = $response->remove_header('Transfer-Encoding')) {
+	$response->push_header('Client-Transfer-Encoding', \@te);
+    }
+    $response->push_header('Client-Response-Num', $socket->increment_response_count);
 
     my $complete;
     $response = $self->collect($arg, $response, sub {
@@ -385,5 +361,41 @@ sub request
 
     $response;
 }
+
+
+#-----------------------------------------------------------
+package LWP::Protocol::http::SocketMethods;
+
+sub sysread {
+    my $self = shift;
+    if (my $timeout = ${*$self}{io_socket_timeout}) {
+	die "read timeout" unless $self->can_read($timeout);
+    }
+    sysread($self, $_[0], $_[1], $_[2] || 0);
+}
+
+sub can_read {
+    my($self, $timeout) = @_;
+    my $fbits = '';
+    vec($fbits, fileno($self), 1) = 1;
+    my $nfound = select($fbits, undef, undef, $timeout);
+    die "select failed: $!" unless defined $nfound;
+    return $nfound > 0;
+}
+
+sub ping {
+    my $self = shift;
+    !$self->can_read(0);
+}
+
+sub increment_response_count {
+    my $self = shift;
+    return ++${*$self}{'myhttp_response_count'};
+}
+
+#-----------------------------------------------------------
+package LWP::Protocol::http::Socket;
+use vars qw(@ISA);
+@ISA = qw(LWP::Protocol::http::SocketMethods Net::HTTP);
 
 1;

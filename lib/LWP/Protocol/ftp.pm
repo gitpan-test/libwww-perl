@@ -1,5 +1,5 @@
 #
-# $Id: ftp.pm,v 1.17 1996/11/11 17:46:37 aas Exp $
+# $Id: ftp.pm,v 1.19 1997/01/23 21:38:59 aas Exp $
 
 # Implementation of the ftp protocol (RFC 959). We let the Net::FTP
 # package do all the dirty work.
@@ -129,8 +129,11 @@ sub request
 	my $data;  # the data handle
 	LWP::Debug::debug("retrieve file?");
 	if (length($remote_file) and $data = $ftp->retr($remote_file)) {
-	    $response->header('Content-Type',
-			      LWP::MediaTypes::guess_media_type($remote_file));
+	    my($type, @enc) = LWP::MediaTypes::guess_media_type($remote_file);
+	    $response->header('Content-Type',   $type) if $type;
+	    for (@enc) {
+		$response->push_header('Content-Encoding', $_);
+	    }
 	    my $mess = $ftp->message;
 	    LWP::Debug::debug($mess);
 	    if ($mess =~ /\((\d+)\s+bytes\)/) {
@@ -226,11 +229,11 @@ sub request
 	    my $bytes = 0;
 	    if (defined $content) {
 		if (ref($content) eq 'SCALAR') {
-		    $bytes = $data->write($$content);
+		    $bytes = $data->write($$content, length($$content));
 		} elsif (ref($content) eq 'CODE') {
 		    my($buf, $n);
 		    while (length($buf = &$content)) {
-			$n = $data->write($content);
+			$n = $data->write($buf, length($buf));
 			last unless $n;
 			$bytes += $n;
 		    }

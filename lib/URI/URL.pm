@@ -1,6 +1,6 @@
 package URI::URL;
 
-$VERSION = "4.08";   # $Date: 1996/12/04 15:12:53 $
+$VERSION = "4.09";   # $Date: 1997/01/26 14:11:08 $
 sub Version { $VERSION; }
 
 require 5.002;
@@ -28,7 +28,6 @@ use strict;
 use vars qw($reserved $reserved_no_slash $reserved_no_form $unsafe
 	    $COMPAT_VER_3
 	    $Debug $Strict_URL
-	    %OVERLOAD
 	   );
 
 $reserved          = ";\\/?:\\@&=#%"; # RFC 1738 reserved pluss '#' and '%'
@@ -43,10 +42,7 @@ $Debug         = 0;     # set to 1 to print URLs on creation
 $COMPAT_VER_3  = 0;     # should we try to behave in the old way
 $Strict_URL    = 0;     # see new()
 
-# Should really use the new 'use overload' interface, but since
-# we fake inheritance of %OVERLOAD in _init_implementor() we keep
-# it for now.
-%OVERLOAD = ( '""' => 'as_string', 'fallback' => 1 );
+use overload ( '""' => 'as_string', 'fallback' => 1 );
 
 my %Implementor = (); # mapping from scheme to implementation class
 
@@ -160,6 +156,7 @@ sub implementor
     unless (defined @{"${ic}::ISA"}) {
 	# Try to load it
 	eval { require "URI/URL/$scheme.pm"; };
+	die $@ if $@ && $@ !~ /Can\'t locate/;
 	$ic = '' unless defined @{"${ic}::ISA"};
     }
     if ($ic) {
@@ -176,10 +173,12 @@ sub _init_implementor
     # Remember that one implementor class may actually
     # serve to implement several URL schemes.
 
-    no strict qw(refs);
-    # Setup overloading - experimental
-    %{"${class}::OVERLOAD"} = %URI::URL::OVERLOAD
-	unless defined %{"${class}::OVERLOAD"};
+    if ($] < 5.003_17) {
+	no strict qw(refs);
+	# Setup overloading inheritace - experimental
+	%{"${class}::OVERLOAD"} = %URI::URL::OVERLOAD
+	    unless defined %{"${class}::OVERLOAD"};
+    }
 }
 
 

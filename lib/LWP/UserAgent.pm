@@ -1,4 +1,4 @@
-# $Id: UserAgent.pm,v 1.39 1996/12/04 15:24:29 aas Exp $
+# $Id: UserAgent.pm,v 1.41 1997/01/26 14:32:38 aas Exp $
 
 package LWP::UserAgent;
 
@@ -283,10 +283,13 @@ sub request
 
 	# Make a copy of the request and initialize it with the new URI
 	my $referral = $request->clone;
-	my $referral_uri = URI::URL->new($response->header('Location'));
-	# some servers erroneously return a relative URL for redirects,
-	# so make it absolute.
-	$referral_uri = $referral_uri->abs($response->base);
+
+	# And then we update the URL based on the Location:-header.
+	# Some servers erroneously return a relative URL for redirects,
+	# so make it absolute if it not already is.
+	my $referral_uri = (URI::URL->new($response->header('Location'),
+					  $response->base))->abs();
+
 	$referral->url($referral_uri);
 
 	return $response unless $self->redirect_ok($referral);
@@ -312,7 +315,9 @@ sub request
 	    return $response;
 	}
 	if (($challenge =~ /^(\S+)\s+Realm\s*=\s*"(.*?)"/i) or
-	    ($challenge =~ /^(\S+)\s+Realm\s*=\s*<([^<>]*)>/i)) {
+	    ($challenge =~ /^(\S+)\s+Realm\s*=\s*<([^<>]*)>/i) or
+	    ($challenge =~ /^(\S+)$/)
+	    ) {
 
 	    my($scheme, $realm) = ($1, $2);
 	    if ($scheme =~ /^Basic$/i) {
@@ -412,9 +417,15 @@ sub request
 		    return $response; # no password found
 		}
 	    } else {
-		warn "Authentication scheme '$scheme' not supported\n";
-		return $response;
-	    }
+		my $class = "LWP::Authen::$scheme";
+		eval "use $class ()";
+		if($@) {
+		    warn $@;
+		    warn "Authentication scheme '$scheme' not supported\n";
+		    return $response;
+		}
+		return $class->authenticate($self, $response, $request, $arg, $size, $scheme, $realm);
+	    } 
 	} else {
 	    warn "Unknown challenge '$challenge'";
 	    return $response;

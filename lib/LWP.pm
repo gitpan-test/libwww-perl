@@ -1,5 +1,5 @@
 #
-# $Id: LWP.pm,v 1.42 1996/10/22 13:44:44 aas Exp $
+# $Id: LWP.pm,v 1.45 1997/01/27 14:16:25 aas Exp $
 
 package LWP;
 
@@ -8,7 +8,7 @@ require Exporter;
                     # don't export anything.  This will noe be neccessary
                     # when perl5.004 is out.
 
-$VERSION = "5.05";
+$VERSION = "5.06";
 
 sub Version { $VERSION; }
 
@@ -351,7 +351,7 @@ layer.  In the same way, a "From" header is initialized from the
 $ua->from value.
 
 For all responses, the library will add a header called "Client-Date".
-This header will recode the time when the response was received by
+This header will encode the time when the response was received by
 your application.  This format and semantics of the header is just
 like the server created "Date" header.
 
@@ -593,7 +593,7 @@ Koenig, Jared Rhine, and Jack Shirazi.
 
 =head1 COPYRIGHT
 
-  Copyright 1995-1996, Gisle Aas
+  Copyright 1995-1997, Gisle Aas
   Copyright 1995, Martijn Koster
 
 This library is free software; you can redistribute it and/or

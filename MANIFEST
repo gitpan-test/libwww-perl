@@ -38,6 +38,7 @@ lib/HTML/HTML32.dtd		The SGML DTD
 lib/HTML/ISOlat1.sgml           Included by the SGML DTD
 lib/HTML/dtd2pm.pl		Writes a perl module
 lib/HTML/ent.pl                 Convert entities
+lib/HTTP/Daemon.pm		A simple httpd
 lib/HTTP/Date.pm		Date conversion routines
 lib/HTTP/Headers.pm		Class encapsulating HTTP Message headers
 lib/HTTP/Message.pm		Class encapsulating HTTP messages
@@ -110,6 +111,7 @@ t/html/linkextractor.t		Test HTML::LinkExtor module
 t/html/split.t                  Test incremental parsing
 t/local/autoload.t		Test autoloading of LWP::Protocol modules
 t/local/get.t			Try to get a local file
+t/local/http.t			Test http to local server
 t/net/cgi-bin/moved
 t/net/cgi-bin/nph-slowdata
 t/net/cgi-bin/slowread
@@ -124,3 +126,4 @@ t/net/moved.t
 t/net/proxy.t
 t/robot/rules-dbm.t		Test WWW::RobotRules::AnyDBM_File
 t/robot/rules.t			Test WWW::RobotRules
+t/robot/ua.t			Test LWP::RobotUA

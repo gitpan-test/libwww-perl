@@ -1,0 +1,103 @@
+ChangeLog			History of this package
+MANIFEST			This file
+MANIFEST.SKIP			For the developer only
+Makefile.PL			Makefile generator
+README				Get you started with this package
+TODO				The To-Do list for the library
+VERSION				Program that determines the current version
+bin/mirror.PL			Writes bin/mirror script
+bin/request.PL			Writes bin/request script
+lib/Font/AFM.pm			Parse Adobe Font Metric files
+lib/Font/Courier.pm		Generated from the corresponding AFM file
+lib/Font/CourierBold.pm		Generated from the corresponding AFM file
+lib/Font/CourierBoldOblique.pm	Generated from the corresponding AFM file
+lib/Font/CourierOblique.pm	Generated from the corresponding AFM file
+lib/Font/Helvetica.pm		Generated from the corresponding AFM file
+lib/Font/HelveticaBold.pm	Generated from the corresponding AFM file
+lib/Font/HelveticaBoldOblique.pm	Same :-)
+lib/Font/HelveticaOblique.pm	Generated from the corresponding AFM file
+lib/Font/TimesBold.pm		Generated from the corresponding AFM file
+lib/Font/TimesBoldItalic.pm	Generated from the corresponding AFM file
+lib/Font/TimesItalic.pm		Generated from the corresponding AFM file
+lib/Font/TimesRoman.pm		Generated from the corresponding AFM file
+lib/Font/makefont.pl		Writes font metric modules
+lib/HTML/AsSubs.pm		Cool interface for constructing HTML
+lib/HTML/Element.pm		Class that represents an HTML element
+lib/HTML/Entities.pm		Entities encoding/decoding routines
+lib/HTML/FormatPS.pm		Postscript formatter
+lib/HTML/FormatText.pm		Text only formatter
+lib/HTML/Formatter.pm		Generic formatter base class
+lib/HTML/Parse.pm		Parse text to build HTML syntax tree
+lib/HTTP/Date.pm		Date conversion routines
+lib/HTTP/Headers.pm		Class encapsulating HTTP Message headers
+lib/HTTP/Message.pm		Class encapsulating HTTP messages
+lib/HTTP/Request.pm		Class encapsulating HTTP Requests
+lib/HTTP/Response.pm		Class encapsulating HTTP Responses
+lib/HTTP/Status.pm		HTTP Status code processing
+lib/LWP.pm			Includes what you need
+lib/LWP/Debug.pm		Debugging support
+lib/LWP/IO.pm			Low level IO routines
+lib/LWP/MediaTypes.pm		Library for guessing media types
+lib/LWP/MemberMixin.pm		Helps you access %$self
+lib/LWP/Protocol.pm		Virtual base class for LWP protocols
+lib/LWP/Protocol/file.pm	Access local files
+lib/LWP/Protocol/ftp.pm		Access with the FTP protocol
+lib/LWP/Protocol/gopher.pm	Access with the Gopher protocol
+lib/LWP/Protocol/http.pm	Access with HTTP protocol
+lib/LWP/Protocol/mailto.pm	Allows you to POST mail using sendmail
+lib/LWP/Simple.pm		Procedural LWP interface
+lib/LWP/Socket.pm		TCP/IP socket interface
+lib/LWP/TkIO.pm			LWP::IO replacement for Tk
+lib/LWP/UserAgent.pm		A WWW UserAgent class
+lib/LWP/media.types		Mapping from file extentions media types
+lib/MIME/Base64.pm		Base 64 encoding/decoding routines
+lib/MIME/QuotedPrint.pm		Quoted-Printable encoding/decoding routines
+lib/Mail/Cap.pm			Parse mailcap files
+lib/URI/Escape.pm		General URI escaping functions
+lib/URI/URL.pm			Class encapsulating URLs
+lib/URI/URL/file.pm		Implements file URLs
+lib/URI/URL/finger.pm		Implements finger URLs
+lib/URI/URL/ftp.pm		Implements ftp URLs
+lib/URI/URL/gopher.pm		Implements gopher URLs
+lib/URI/URL/http.pm		Dummy
+lib/URI/URL/https.pm		Implements https URLs
+lib/URI/URL/mailto.pm		Implements mailto URLs
+lib/URI/URL/news.pm		Implements news URLs
+lib/URI/URL/nntp.pm		Implements nntp URLs
+lib/URI/URL/prospero.pm		Implements prospero URLs
+lib/URI/URL/rlogin.pm		Implements rlogin URLs
+lib/URI/URL/telnet.pm		Implements telnet URLs
+lib/URI/URL/tn3270.pm		Implements tn3270 URLs
+lib/URI/URL/wais.pm		Implements wais URLs
+lib/URI/URL/webster.pm		Implements webster URLs
+lib/URI/URL/whois.pm		Implements whois URLs
+lib/WWW/RobotRules.pm		Parse robot.txt files
+t/README			How to run and set up tests
+t/TEST				Run tests
+t/base/afm.t			Test Font::AFM module
+t/base/base64.t			Test MIME::Base64 module
+t/base/date.t			Test HTTP::Date module
+t/base/entities.t		Test HTML::Entities module
+t/base/headers.t		Test HTTP::Headers module
+t/base/html-parse.t		Test HTML::Parse module
+t/base/mailcap.t		Test Mail::Cap module
+t/base/mediatypes.t		Test LWP::MediaTypes module
+t/base/message.t		Test HTTP::Request/HTTP::Response
+t/base/quoted-print.t		Test MIME::QuotedPrint module
+t/base/robot-rules.t		Test WWW::RobotRules module
+t/base/status.t			Test HTTP::Status module
+t/base/uri.t			Test URI::URL module
+t/local/autoload.t		Test autoloading of LWP::Protocol modules
+t/local/get.t			Try to get a local file
+t/net/cgi-bin/moved
+t/net/cgi-bin/nph-slowdata
+t/net/cgi-bin/slowread
+t/net/cgi-bin/test
+t/net/cgi-bin/timeout
+t/net/config.pl.dist		Suggested configuration for net tests
+t/net/http-get.t
+t/net/http-post.t
+t/net/http-timeout.t
+t/net/mirror.t
+t/net/moved.t
+t/net/proxy.t

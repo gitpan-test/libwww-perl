@@ -1,0 +1,31 @@
+#!/usr/local/bin/perl
+
+unless (-d "base") {
+    # try to move into test directory
+    chdir "t" or die "Can't chdir: $!";
+
+    # fix all relative library locations
+    foreach (@INC) {
+	$_ = "../$_" unless m,^/,;
+    }
+    # print "@INC\n";
+}
+
+use Test::Harness;
+$Test::Harness::verbose = shift
+  if $ARGV[0] =~ /^\d+$/ || $ARGV[0] eq "-v";
+
+if (@ARGV) {
+    for (@ARGV) {
+	if (-d $_) {
+	    push(@tests, <$_/*.t>);
+	} else {
+	    push(@tests, $_);
+	}
+    }
+} else {
+    @tests = (<base/*.t>, <local/*.t>);
+    push(@tests, <net/*.t>) if -f "net/config.pl";
+}
+
+runtests @tests;

@@ -63,7 +63,7 @@ print "ok 7\n";
 $r = undef;
 
 print "*** Dump of database ***\n";
-tie(%cat, NDBM_File, $file, 0, 0644) or die "Can't tie: $!";
+tie(%cat, AnyDBM_File, $file, 0, 0644) or die "Can't tie: $!";
 while (($key,$val) = each(%cat)) {
     print "$key\t$val\n";
 }
@@ -105,14 +105,14 @@ print "ok 12\n";
 $r = undef;
 
 print "*** Dump of database ***\n";
-tie(%cat, NDBM_File, $file, 0, 0644) or die "Can't tie: $!";
+tie(%cat, AnyDBM_File, $file, 0, 0644) or die "Can't tie: $!";
 while (($key,$val) = each(%cat)) {
     print "$key\t$val\n";
 }
 print "******\n";
 
 
-unlink "$file.pag", "$file.dir";
+unlink "$file", "$file.pag", "$file.dir", "$file.db";
 
 # Try open a an emty database without specifying a name
 eval { 
@@ -122,4 +122,4 @@ print $@;
 print "not " unless $@;  # should fail
 print "ok 13\n";
 
-unlink "$file.pag", "$file.dir";
+unlink "$file", "$file.pag", "$file.dir", "$file.db";

@@ -1,4 +1,4 @@
-# $Id: Daemon.pm,v 1.8 1996/10/22 08:11:54 aas Exp $
+# $Id: Daemon.pm,v 1.13 1996/11/13 13:22:21 aas Exp $
 #
 
 use strict;
@@ -60,7 +60,7 @@ to the I<IO::Socket::INET> base class.
 
 use vars qw($VERSION @ISA $PROTO);
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 use IO::Socket ();
 @ISA=qw(IO::Socket::INET);
@@ -138,6 +138,17 @@ sub url
 }
 
 
+=item $d->product_tokens
+
+Returns the name that this server will use to identify itself.  This
+is the string that is sent with the I<Server> response header.
+
+=cut
+
+sub product_tokens
+{
+    "libwww-perl-daemon/$HTTP::Daemon::VERSION";
+}
 
 
 package HTTP::Daemon::ClientConn;
@@ -201,8 +212,9 @@ sub get_request
     }
     $buf =~ s/^(\w+)\s+(\S+)(?:\s+(HTTP\/\d+\.\d+))?[^\012]*\012//;
     my $proto = $3 || "HTTP/0.9";
+    ${*$self}{'httpd_client_proto'} = $proto;
     my $r = HTTP::Request->new($1, url($2, $self->daemon->url));
-    $r->protocol($3);
+    $r->protocol($proto);
 
     my($key, $val);
   HEADER:
@@ -237,6 +249,7 @@ sub get_request
 		last CHUNK if $size == 0;
 
 		my $missing = $size - length($buf);
+		$missing += 2; # also read CRLF at chunk end
 		$body .= $buf;
 		$buf = "";
 		# must read rest of chunk and append it to the $body
@@ -248,6 +261,8 @@ sub get_request
 		    return undef if $n == 0;
 		    $missing -= $n;
 		}
+		substr($body, -2, 2) = ''; # remove CRLF at end
+
 	    } else {
 		# need more data in order to have a complete chunk header
 		if ($timeout) {
@@ -298,7 +313,7 @@ sub get_request
 
     } elsif ($ct && lc($ct) =~ m/^multipart\/\w+\s*;.*boundary\s*=\s*(\w+)/) {
 	# Handle multipart content type
-	my $boundary = "\012--$1--";
+	my $boundary = "$CRLF--$1--$CRLF";
 	while (index($buf, $boundary) < 0) {
 	    # end marker not yet found
 	    if ($timeout) {
@@ -307,6 +322,7 @@ sub get_request
 	    my $n = sysread($self, $buf, 2048, length($buf));
 	    return undef if $n == 0;
 	}
+	$r->content($buf);
 
     } elsif ($len) {
 	# Plain body specified by "Content-Length"
@@ -328,6 +344,20 @@ sub get_request
 }
 
 
+=item $c->antique_client
+
+Returns TRUE if the client speaks the HTTP/0.9 protocol, i.e. no
+status code or headers should be returned.
+
+=cut
+
+sub antique_client
+{
+    my $self = shift;
+    ${*$self}{'httpd_client_proto'} eq 'HTTP/0.9';
+}
+
+
 =item $c->send_status_line( [$code, [$mess, [$proto]]] )
 
 Sends the status line back to the client.
@@ -337,6 +367,7 @@ Sends the status line back to the client.
 sub send_status_line
 {
     my($self, $status, $message, $proto) = @_;
+    return if $self->antique_client;
     $status  ||= RC_OK;
     $message ||= status_message($status);
     $proto   ||= $HTTP::Daemon::PROTO;
@@ -361,9 +392,11 @@ the client.
 sub send_basic_header
 {
     my $self = shift;
+    return if $self->antique_client;
     $self->send_status_line(@_);
     print $self "Date: ", time2str(time), $CRLF;
-    print $self "Server: libwww-perl-daemon/$HTTP::Daemon::VERSION$CRLF";
+    my $product = $self->daemon->product_tokens;
+    print $self "Server: $product$CRLF" if $product;
 }
 
 
@@ -382,9 +415,11 @@ sub send_response
 	$res ||= RC_OK;
 	$res = HTTP::Response->new($res, @_);
     }
-    $self->send_basic_header($res->code, $res->message, $res->protocol);
-    print $self $res->headers_as_string($CRLF);
-    print $self $CRLF;  # separates headers and content
+    unless ($self->antique_client) {
+	$self->send_basic_header($res->code, $res->message, $res->protocol);
+	print $self $res->headers_as_string($CRLF);
+	print $self $CRLF;  # separates headers and content
+    }
     print $self $res->content;
 }
 
@@ -430,12 +465,14 @@ sub send_error
     Carp::croak("Status '$status' is not an error") unless is_error($status);
     my $mess = status_message($status);
     $error  ||= "";
-    $self->send_basic_header($status);
-    print $self "Content-Type: text/html$CRLF";
-    print $self $CRLF;
+    unless ($self->antique_client) {
+        $self->send_basic_header($status);
+        print $self "Content-Type: text/html$CRLF";
+        print $self $CRLF;
+    }
     print $self <<EOT;
 <title>$status $mess</title>
-<h1>$status $mess</title>
+<h1>$status $mess</h1>
 $error
 EOT
     $status;
@@ -461,12 +498,14 @@ sub send_file_response
 	  return $self->send_error(RC_FORBIDDEN);
 	my($ct,$ce) = guess_media_type($file);
 	my($size,$mtime) = (stat _)[7,9];
-	$self->send_basic_header;
-	print $self "Content-Type: $ct$CRLF";
-	print $self "Content-Encoding: $ce$CRLF" if $ce;
-	print $self "Content-Length: $size$CRLF";
-	print $self "Last-Modified: ", time2str($mtime), "$CRLF";
-	print $self $CRLF;
+	unless ($self->antique_client) {
+	    $self->send_basic_header;
+	    print $self "Content-Type: $ct$CRLF";
+	    print $self "Content-Encoding: $ce$CRLF" if $ce;
+	    print $self "Content-Length: $size$CRLF";
+	    print $self "Last-Modified: ", time2str($mtime), "$CRLF";
+	    print $self $CRLF;
+	}
 	$self->send_file(\*F);
 	return RC_OK;
     } else {

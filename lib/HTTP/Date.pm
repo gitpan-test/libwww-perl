@@ -1,4 +1,4 @@
-# $Id: Date.pm,v 1.19 1996/06/13 08:23:15 aas Exp $
+# $Id: Date.pm,v 1.22 1996/11/25 08:18:32 aas Exp $
 #
 package HTTP::Date;
 
@@ -38,7 +38,7 @@ and 2038.  The function is able to parse the following formats:
 
  "Wed, 09 Feb 1994 22:23:32 GMT"       -- HTTP format
  "Thu Feb  3 17:03:55 GMT 1994"        -- ctime(3) format
- 'Thu Feb  3 00:00:00 1994',           -- ANSI C asctime() format
+ "Thu Feb  3 00:00:00 1994",           -- ANSI C asctime() format
  "Tuesday, 08-Feb-94 14:15:29 GMT"     -- old rfc850 HTTP format
  "Tuesday, 08-Feb-1994 14:15:29 GMT"   -- broken rfc850 HTTP format
 
@@ -54,13 +54,15 @@ and 2038.  The function is able to parse the following formats:
  "19940203T141529Z"             -- ISO 8601 compact format
  "19940203"                     -- only date
 
- "08-Feb-94"     -- old rfc850 HTTP format    (no weekday, no time)
- "08-Feb-1994"   -- broken rfc850 HTTP format (no weekday, no time)
- "09 Feb 1994"   -- proposed new HTTP format  (no weekday, no time)
- "03/Feb/1994"   -- common logfile format     (no time, no offset)
+ "08-Feb-94"         -- old rfc850 HTTP format    (no weekday, no time)
+ "08-Feb-1994"       -- broken rfc850 HTTP format (no weekday, no time)
+ "09 Feb 1994"       -- proposed new HTTP format  (no weekday, no time)
+ "03/Feb/1994"       -- common logfile format     (no time, no offset)
 
- "Feb  3  1994"  -- Unix 'ls -l' format
- "Feb  3 17:03"  -- Unix 'ls -l' format
+ "Feb  3  1994"      -- Unix 'ls -l' format
+ "Feb  3 17:03"      -- Unix 'ls -l' format
+
+ "11-15-96  03:52PM" -- Windows 'dir' format
 
 The parser ignores leading and trailing whitespace.  It also allow the
 seconds to be missing and the month to be numerical in most formats.
@@ -87,7 +89,7 @@ formats.  This makes the module name misleading :-)
 =cut
 
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.19 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.22 $ =~ /(\d+)\.(\d+)/);
 sub Version { $VERSION; }
 
 require 5.002;
@@ -100,7 +102,8 @@ use Time::Local ();
 use strict;
 use vars qw(@DoW @MoY %MoY);
 
-@DoW = qw(Sunday Monday Tuesday Wednesday Thursday Friday Saturday);
+#@DoW = qw(Sunday Monday Tuesday Wednesday Thursday Friday Saturday);
+@DoW = qw(Sun Mon Tue Wed Thu Fri Sat);
 @MoY = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
 # Build %MoY hash
 my $i = 0;
@@ -119,7 +122,7 @@ sub time2str (;$)
    $time = time unless defined $time;
    my ($sec, $min, $hour, $mday, $mon, $year, $wday) = gmtime($time);
    sprintf("%s, %02d %s %04d %02d:%02d:%02d GMT",
-	   substr($DoW[$wday],0,3),
+	   $DoW[$wday],
 	   $mday, $MoY[$mon], $year+1900,
 	   $hour, $min, $sec);
 }
@@ -136,7 +139,7 @@ sub str2time ($;$)
    # Remove useless weekday, if it exists
    s/^\s*(?:sun|mon|tue|wed|thu|fri|sat)\w*,?\s*//i;
 
-   my($day, $mon, $yr, $hr, $min, $sec, $tz);
+   my($day, $mon, $yr, $hr, $min, $sec, $tz, $aorp);
    my $offset = 0;  # used when compensating for timezone
 
  PARSEDATE: {
@@ -210,6 +213,20 @@ sub str2time ($;$)
 	/x
 	  and last PARSEDATE;
 
+      # Windows 'dir' 11-12-96  03:52PM
+      ($mon, $day, $yr, $hr, $min, $aorp) =
+        /^\s*
+          (\d{2})                # numerical month
+             -
+          (\d{2})                # day
+             -
+          (\d{2})                # year
+             \s+
+          (\d\d?):(\d\d)(am|pm)  # hour:min am or pm
+             \s*$
+        /ix
+          and last PARSEDATE;
+
       # If it is not recognized by now we give up
       return undef;
    }
@@ -245,8 +262,12 @@ sub str2time ($;$)
    return undef if $yr > 138;
    return undef if $yr <  70;  # 1970 is Unix epoch
 
-   # Check the day
-   return undef if $day < 1 || $day > 31;
+   # Compensate for AM/PM
+   if ($aorp) {
+       $aorp = uc $aorp;
+       $hr = 0 if $hr == 12 && $aorp eq 'AM';
+       $hr += 12 if $aorp eq 'PM';
+   }
 
    # Make sure things are defined
    for ($sec, $min, $hr) {  $_ = 0 unless defined   }

@@ -238,7 +238,7 @@ sub epath {
      my $self = shift;
      my $old = $self->_elem('path', @_);
      return '/' if !defined($old) || !length($old);
-     return '/$old' if $old !~ m|^/| && defined $self->{'netloc'};
+     return "/$old" if $old !~ m|^/| && defined $self->{'netloc'};
      $old;
 }
 
@@ -262,7 +262,7 @@ sub path {
 
     return '/' if !defined($old) || !length($old);
     Carp::croak("Path components contain '/' (you must call epath)")
-	if $old =~ /%2[fF]/;
+	if $old =~ /%2[fF]/ and !@_;
     $old = "/$old" if $old !~ m|^/| && defined $self->{'netloc'};
     return uri_unescape($old);
 }
@@ -438,7 +438,7 @@ sub abs
 
 # The oposite of $url->abs.  Return a URL as much relative as possible
 sub rel {
-    my($self, $base) = shift;
+    my($self, $base) = @_;
     my $rel = $self->clone;
     $base = $self->base unless $base;
     return $rel unless $base;
@@ -452,8 +452,8 @@ sub rel {
     }
     
     my($bscheme, $bnetloc, $bpath) = @{$base}{qw(scheme netloc path)};
+    for ($netloc, $bnetloc, $bpath) { $_ = '' unless defined }
     $bpath = "/" unless length $bpath;  # a slash is default
-    for ($netloc, $bnetloc) { $_ = '' unless defined }  # these can be empty
     unless ($scheme eq $bscheme && $netloc eq $bnetloc) {
 	# different location, can't make it relative
 	return $rel;

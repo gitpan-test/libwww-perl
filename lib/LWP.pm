@@ -1,5 +1,5 @@
 #
-# $Id: LWP.pm,v 1.46 1997/01/29 13:04:41 aas Exp $
+# $Id: LWP.pm,v 1.48 1997/04/05 12:37:58 aas Exp $
 
 package LWP;
 
@@ -8,7 +8,7 @@ require Exporter;
                     # don't export anything.  This will noe be neccessary
                     # when perl5.004 is out.
 
-$VERSION = "5.07";
+$VERSION = "5.08";
 
 sub Version { $VERSION; }
 
@@ -22,6 +22,11 @@ __END__
 =head1 NAME
 
 LWP - Library for WWW access in Perl
+
+=head1 SYNOPSIS
+
+  use LWP;
+  print "This is libwww-perl-$LWP::VERSION\n";
 
 
 =head1 DESCRIPTION

@@ -1,4 +1,4 @@
-# $Id: http.pm,v 1.61 2001/11/17 02:10:28 gisle Exp $
+# $Id: http.pm,v 1.63 2001/12/14 19:33:52 gisle Exp $
 #
 
 package LWP::Protocol::http;
@@ -207,7 +207,7 @@ sub request
 	#LWP::Debug::conns($req_buf);
     }
 
-    my($code, $mess);
+    my($code, $mess, @junk);
     my $drop_connection;
 
     if ($has_content) {
@@ -264,7 +264,9 @@ sub request
 		$socket->_rbuf($buf);
 		if ($buf =~ /\015?\012\015?\012/) {
 		    # a whole response present
-		    ($code, $mess, @h) = $socket->read_response_headers;
+		    ($code, $mess, @h) = $socket->read_response_headers(laxed => 1,
+									junk_out => \@junk,
+								       );
 		    if ($code eq "100") {
 			$write_wait = 0;
 			undef($code);
@@ -298,9 +300,9 @@ sub request
 	}
     }
 
-    ($code, $mess, @h) = $socket->read_response_headers
+    ($code, $mess, @h) = $socket->read_response_headers(laxed => 1, junk_out => \@junk)
 	unless $code;
-    ($code, $mess, @h) = $socket->read_response_headers
+    ($code, $mess, @h) = $socket->read_response_headers(laxed => 1, junk_out => \@junk)
 	if $code eq "100";
 
     my $response = HTTP::Response->new($code, $mess);
@@ -310,6 +312,7 @@ sub request
 	my($k, $v) = splice(@h, 0, 2);
 	$response->push_header($k, $v);
     }
+    $response->push_header("Client-Junk" => \@junk) if @junk;
 
     $response->request($request);
     $self->_get_sock_info($response, $socket);
@@ -370,6 +373,11 @@ sub sysread {
     my $self = shift;
     if (my $timeout = ${*$self}{io_socket_timeout}) {
 	die "read timeout" unless $self->can_read($timeout);
+    }
+    else {
+	# since we have made the socket non-blocking we
+	# use select to wait for some data to arrive
+	$self->can_read(undef) || die "Assert";
     }
     sysread($self, $_[0], $_[1], $_[2] || 0);
 }

@@ -8,6 +8,7 @@ bin/lwp-mirror.PL		Writes bin/lwp-mirror script
 bin/lwp-request.PL		Writes bin/lwp-request script
 bin/lwp-rget.PL			Writes bin/lwp-rget script
 lwpcook.pod			Libwww-perl examples
+lib/Bundle/LWP.pm               Defines prereq modules
 lib/File/CounterFile.pm		Persistent counter class
 lib/File/Listing.pm		Parse directory listings
 lib/Font/AFM.pm			Parse Adobe Font Metric files
@@ -45,6 +46,7 @@ lib/HTTP/Headers.pm		Class encapsulating HTTP Message headers
 lib/HTTP/Message.pm		Class encapsulating HTTP messages
 lib/HTTP/Negotiate.pm		Evaluate HTTP content negotiation algoritm
 lib/HTTP/Request.pm		Class encapsulating HTTP Requests
+lib/HTTP/Request/Common.pm      Generate common requests
 lib/HTTP/Response.pm		Class encapsulating HTTP Responses
 lib/HTTP/Status.pm		HTTP Status code processing
 lib/LWP.pm			Includes what you need
@@ -66,8 +68,6 @@ lib/LWP/Socket.pm		TCP/IP socket interface
 lib/LWP/TkIO.pm			LWP::IO replacement for Tk
 lib/LWP/UserAgent.pm		A WWW UserAgent class
 lib/LWP/media.types		Mapping from file extentions media types
-lib/MIME/Base64.pm		Base 64 encoding/decoding routines
-lib/MIME/QuotedPrint.pm		Quoted-Printable encoding/decoding routines
 lib/URI/Escape.pm		General URI escaping functions
 lib/URI/URL.pm			Class encapsulating URLs
 lib/URI/URL/_generic.pm		Implements generic hierarchical RL (RFC 1808)
@@ -94,14 +94,13 @@ lib/WWW/RobotRules/AnyDBM_File.pm	Persistent robot rules
 t/README			How to run and set up tests
 t/TEST				Run tests
 t/base/afm.t			Test Font::AFM module
-t/base/base64.t			Test MIME::Base64 module
+t/base/common-req.t		Test HTTP::Request::Common module
 t/base/date.t			Test HTTP::Date module
 t/base/headers.t		Test HTTP::Headers module
 t/base/listing.t		Test File::Listing module
 t/base/mediatypes.t		Test LWP::MediaTypes module
 t/base/message.t		Test HTTP::Request/HTTP::Response
 t/base/negotiate.t		Test HTTP::Negotiation module
-t/base/quoted-print.t		Test MIME::QuotedPrint module
 t/base/response.t		Test additional HTTP::Response methods
 t/base/status.t			Test HTTP::Status module
 t/base/uri.t			Test URI::URL module
@@ -115,6 +114,7 @@ t/html/split.t                  Test incremental parsing
 t/local/autoload.t		Test autoloading of LWP::Protocol modules
 t/local/get.t			Try to get a local file
 t/local/http.t			Test http to local server
+t/local/protosub.t              Test with other protocol module
 t/net/cgi-bin/moved
 t/net/cgi-bin/nph-slowdata
 t/net/cgi-bin/slowread

@@ -1,6 +1,6 @@
-package HTTP::Date;  # $Date: 2000/02/14 15:37:48 $
+package HTTP::Date;  # $Date: 2000/08/17 08:40:29 $
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.40 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.42 $ =~ /(\d+)\.(\d+)/);
 
 require 5.004;
 require Exporter;
@@ -65,7 +65,7 @@ sub str2time ($;$)
     elsif ($tz =~ /^([-+])?(\d\d?):?(\d\d)?$/) {
 	$offset = 3600 * $2;
 	$offset += 60 * $3 if $3;
-	$offset *= -1 if $1 && $1 ne '-';
+	$offset *= -1 if $1 && $1 eq '-';
     }
     else {
 	eval { require Time::Zone } || return undef;
@@ -74,7 +74,7 @@ sub str2time ($;$)
     }
 
     return eval { my $t = Time::Local::timegm(reverse @d);
-		  $t < 0 ? undef : $t + $offset;
+		  $t < 0 ? undef : $t - $offset;
 		};
 }
 
@@ -105,6 +105,8 @@ sub parse_date ($)
 	 )?                    # optional clock
 	    \s*
 	 ([-+]?\d{2,4}|(?![APap][Mm]\b)[A-Za-z]+)? # timezone
+	    \s*
+	 (?:\(\w+\))?	       # ASCII representation of timezone in parens.
 	    \s*$
 	/x)
 

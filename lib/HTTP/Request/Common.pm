@@ -1,4 +1,4 @@
-# $Id: Common.pm,v 1.16 1999/10/28 11:49:02 gisle Exp $
+# $Id: Common.pm,v 1.18 2000/09/16 18:25:47 gisle Exp $
 #
 package HTTP::Request::Common;
 
@@ -15,7 +15,7 @@ require Exporter;
 require HTTP::Request;
 use Carp();
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 my $CRLF = "\015\012";   # "\r\n" is not portable
 
@@ -45,11 +45,32 @@ sub POST
     }
 
     if (ref $content) {
-	if (lc($ct) eq 'multipart/form-data') {    #XXX: boundary="..."
+	if ($ct =~ m,^multipart/form-data\s*(;|$),i) {
+	    require HTTP::Headers::Util;
+	    my @v = HTTP::Headers::Util::split_header_words($ct);
+	    Carp::carp("Multiple Content-Type headers") if @v > 1;
+	    @v = @{$v[0]};
+
 	    my $boundary;
+	    my $boundary_index;
+	    for (my @tmp = @v; @tmp;) {
+		my($k, $v) = splice(@tmp, 0, 2);
+		if (lc($k) eq "boundary") {
+		    $boundary = $v;
+		    $boundary_index = @v - @tmp - 1;
+		    last;
+		}
+	    }
+
 	    ($content, $boundary) = form_data($content, $boundary);
-	    $boundary = qq("$boundary") if $boundary =~ /\W/;
-	    $ct = qq(multipart/form-data; boundary=$boundary);
+
+	    if ($boundary_index) {
+		$v[$boundary_index] = $boundary;
+	    } else {
+		push(@v, boundary => $boundary);
+	    }
+
+	    $ct = HTTP::Headers::Util::join_header_words(@v);
 	} else {
 	    # We use a temporary URI object to format
 	    # the application/x-www-form-urlencoded content.
@@ -379,7 +400,7 @@ L<HTTP::Request>, L<LWP::UserAgent>
 
 =head1 COPYRIGHT
 
-Copyright 1997-1998, Gisle Aas
+Copyright 1997-2000, Gisle Aas
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

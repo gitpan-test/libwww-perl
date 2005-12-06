@@ -1,13 +1,13 @@
 package HTML::Form;
 
-# $Id: Form.pm,v 1.49 2004/12/11 14:45:52 gisle Exp $
+# $Id: Form.pm,v 1.51 2005/12/06 09:17:35 gisle Exp $
 
 use strict;
 use URI;
 use Carp ();
 
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%03d", q$Revision: 1.49 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%03d", q$Revision: 1.51 $ =~ /(\d+)\.(\d+)/);
 
 my %form_tags = map {$_ => 1} qw(input textarea button select option);
 

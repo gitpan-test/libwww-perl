@@ -3,7 +3,7 @@
 use strict;
 use Test qw(plan ok skip);
 
-plan tests => 92;
+plan tests => 95;
 
 require HTTP::Message;
 
@@ -72,10 +72,31 @@ Foo: 1
 foobarbaz
 EOT
 
+$m = HTTP::Message->parse(<<EOT);
+Date: Fri, 18 Feb 2005 18:33:46 GMT
+Connection: close
+Content-Type: text/plain
+
+foo:bar
+second line
+EOT
+ok($m->content(""), <<EOT);
+foo:bar
+second line
+EOT
+ok($m->as_string, <<EOT);
+Connection: close
+Date: Fri, 18 Feb 2005 18:33:46 GMT
+Content-Type: text/plain
+
+EOT
+
 $m = HTTP::Message->parse("  abc\nfoo: 1\n");
 ok($m->as_string, "\n  abc\nfoo: 1\n");
 $m = HTTP::Message->parse(" foo : 1\n");
 ok($m->as_string, "\n foo : 1\n");
+$m = HTTP::Message->parse("\nfoo: bar\n");
+ok($m->as_string, "\nfoo: bar\n");
 
 $m = HTTP::Message->new([a => 1, b => 2], "abc");
 ok($m->content("foo\n"), "abc");

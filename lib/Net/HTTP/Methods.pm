@@ -1,6 +1,6 @@
 package Net::HTTP::Methods;
 
-# $Id: Methods.pm,v 1.18 2004/12/30 12:28:14 gisle Exp $
+# $Id: Methods.pm,v 1.22 2005/12/07 10:01:37 gisle Exp $
 
 require 5.005;  # 4-arg substr
 
@@ -22,12 +22,13 @@ sub http_configure {
     my($self, $cnf) = @_;
 
     die "Listen option not allowed" if $cnf->{Listen};
+    my $explict_host = (exists $cnf->{Host});
     my $host = delete $cnf->{Host};
     my $peer = $cnf->{PeerAddr} || $cnf->{PeerHost};
     if ($host) {
 	$cnf->{PeerAddr} = $host unless $peer;
     }
-    else {
+    elsif (!$explict_host) {
 	$host = $peer;
 	$host =~ s/:.*//;
     }
@@ -47,9 +48,9 @@ sub http_configure {
 
     return undef unless $self->http_connect($cnf);
 
-    unless ($host =~ /:/) {
+    if ($host && $host !~ /:/) {
 	my $p = $self->peerport;
-	$host .= ":$p";
+	$host .= ":$p" if $p != $self->http_default_port;
     }
     $self->host($host);
     $self->keep_alive($keep_alive);
@@ -158,7 +159,10 @@ sub format_request {
 	}
     }
     push(@h2, "Connection: " . join(", ", @connection)) if @connection;
-    push(@h2, "Host: ${*$self}{'http_host'}") unless $given{host};
+    unless ($given{host}) {
+	my $h = ${*$self}{'http_host'};
+	push(@h2, "Host: $h") if $h;
+    }
 
     return join($CRLF, "$method $uri HTTP/$ver", @h2, @h, "", $content);
 }
@@ -334,7 +338,10 @@ sub read_response_headers {
 	    push(@te, $te) if length($te);
 	}
 	elsif ($h eq 'content-length') {
-	    $content_length = $headers[$i+1];
+	    # ignore bogus and overflow values
+	    if ($headers[$i+1] =~ /^\s*(\d{1,15})(?:\s|$)/) {
+		$content_length = $1;
+	    }
 	}
     }
     ${*$self}{'http_te'} = join(",", @te);

@@ -1,10 +1,10 @@
 package LWP::Protocol;
 
-# $Id: Protocol.pm,v 1.43 2004/11/12 13:34:10 gisle Exp $
+# $Id: Protocol.pm,v 1.46 2007/07/19 20:26:11 gisle Exp $
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.43 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.46 $ =~ /(\d+)\.(\d+)/);
 
 use strict;
 use Carp ();
@@ -98,14 +98,16 @@ sub collect
 {
     my ($self, $arg, $response, $collector) = @_;
     my $content;
-    my($parse_head, $max_size) = @{$self}{qw(parse_head max_size)};
+    my($ua, $parse_head, $max_size) = @{$self}{qw(ua parse_head max_size)};
 
     my $parser;
     if ($parse_head && $response->content_type eq 'text/html') {
 	require HTML::HeadParser;
 	$parser = HTML::HeadParser->new($response->{'_headers'});
+        $parser->utf8_mode(1) if $] >= 5.008 && $HTML::Parser::VERSION >= 3.40;
     }
     my $content_size = 0;
+    my $length = $response->content_length;
 
     if (!defined($arg) || !$response->is_success) {
 	# scalar
@@ -116,11 +118,10 @@ sub collect
 	    LWP::Debug::debug("read " . length($$content) . " bytes");
 	    $response->add_content($$content);
 	    $content_size += length($$content);
+	    $ua->progress(($length ? ($content_size / $length) : "tick"), $response);
 	    if (defined($max_size) && $content_size > $max_size) {
 		LWP::Debug::debug("Aborting because size limit exceeded");
 		$response->push_header("Client-Aborted", "max_size");
-		#my $tot = $response->header("Content-Length") || 0;
-		#$response->header("X-Content-Range", "bytes 0-$content_size/$tot");
 		last;
 	    }
 	}
@@ -139,11 +140,10 @@ sub collect
 	    LWP::Debug::debug("read " . length($$content) . " bytes");
 	    print OUT $$content or die "Can't write to '$arg': $!";
 	    $content_size += length($$content);
+	    $ua->progress(($length ? ($content_size / $length) : "tick"), $response);
 	    if (defined($max_size) && $content_size > $max_size) {
 		LWP::Debug::debug("Aborting because size limit exceeded");
 		$response->push_header("Client-Aborted", "max_size");
-		#my $tot = $response->header("Content-Length") || 0;
-		#$response->header("X-Content-Range", "bytes 0-$content_size/$tot");
 		last;
 	    }
 	}
@@ -165,6 +165,8 @@ sub collect
 		$response->push_header("Client-Aborted", "die");
 		last;
 	    }
+	    $content_size += length($$content);
+	    $ua->progress(($length ? ($content_size / $length) : "tick"), $response);
 	}
     }
     else {

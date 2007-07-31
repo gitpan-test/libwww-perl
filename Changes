@@ -1,4 +1,14 @@
-2007-07-17   Gisle Aas <gisle@ActiveState.com>
+2007-07-31   Gisle Aas <gisle@ActiveState.com>
+
+     Release 5.807
+     
+     Apply patch correction from CPAN RT #26152
+     
+     More laxed t/live/validator test.
+
+
+
+2007-07-19   Gisle Aas <gisle@ActiveState.com>
 
      Release 5.806
 

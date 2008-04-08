@@ -1,5 +1,3 @@
-# $Id: Common.pm,v 1.28 2007/07/19 20:46:48 gisle Exp $
-#
 package HTTP::Request::Common;
 
 use strict;
@@ -15,7 +13,7 @@ require Exporter;
 require HTTP::Request;
 use Carp();
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.28 $ =~ /(\d+)\.(\d+)/);
+$VERSION = "5.810";
 
 my $CRLF = "\015\012";   # "\r\n" is not portable
 
@@ -134,8 +132,12 @@ sub form_data   # RFC1867
 		$usename = $file;
 		$usename =~ s,.*/,, if defined($usename);
 	    }
+            $k =~ s/([\\\"])/\\$1/g;
 	    my $disp = qq(form-data; name="$k");
-	    $disp .= qq(; filename="$usename") if $usename;
+            if ($usename) {
+                $usename =~ s/([\\\"])/\\$1/g;
+                $disp .= qq(; filename="$usename");
+            }
 	    my $content = "";
 	    my $h = HTTP::Headers->new(@headers);
 	    if ($file) {

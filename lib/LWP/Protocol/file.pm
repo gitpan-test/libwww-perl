@@ -1,6 +1,3 @@
-#
-# $Id: file.pm,v 1.23 2004/11/15 22:53:36 gisle Exp $
-
 package LWP::Protocol::file;
 
 require LWP::Protocol;
@@ -13,10 +10,6 @@ require HTTP::Request;
 require HTTP::Response;
 require HTTP::Status;
 require HTTP::Date;
-
-require URI::Escape;
-require HTML::Entities;
-
 
 
 sub request
@@ -96,6 +89,8 @@ sub request
 	closedir(D);
 
 	# Make directory listing
+	require URI::Escape;
+	require HTML::Entities;
         my $pathe = $path . ( $^O eq 'MacOS' ? ':' : '/');
 	for (@files) {
 	    my $furl = URI::Escape::uri_escape($_);

@@ -1,13 +1,11 @@
 package LWP::UserAgent;
 
-# $Id: UserAgent.pm,v 2.36 2006/06/05 08:36:37 gisle Exp $
-
 use strict;
 use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = sprintf("%d.%03d", q$Revision: 2.36 $ =~ /(\d+)\.(\d+)/);
+$VERSION = "5.810";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -32,6 +30,10 @@ if ($ENV{PERL_LWP_USE_HTTP_10}) {
 
 sub new
 {
+    # Check for common user mistake
+    Carp::croak("Options to LWP::UserAgent should be key/value pairs, not hash reference") 
+        if ref($_[1]) eq 'HASH'; 
+
     my($class, %cnf) = @_;
     LWP::Debug::trace('()');
 
@@ -1012,6 +1014,11 @@ for details.
 Set the user name and password to be used for a realm.  It is often more
 useful to specialize the get_basic_credentials() method instead.
 
+The $netloc a string of the form "<host>:<port>".  The username and
+password will only be passed to this server.  Example:
+
+  $ua->credenticals("www.example.com:80", "Some Realm", "foo", "secret");
+
 =item $ua->max_size
 
 =item $ua->max_size( $bytes )
@@ -1379,7 +1386,7 @@ specialized user agents based on C<LWP::UserAgent>.
 
 =head1 COPYRIGHT
 
-Copyright 1995-2004 Gisle Aas.
+Copyright 1995-2008 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

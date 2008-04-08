@@ -1,5 +1,4 @@
 # This -*- perl -*- script writes the Makefile for libwww-perl
-# $Id: Makefile.PL,v 1.77 2007/07/19 20:26:10 gisle Exp $
 
 require 5.005;
 use strict;
@@ -174,7 +173,7 @@ if ($@) {
 $@
 The HTML::Parser is needed to extract correct base URI information from
 HTML so that we can resolve relative links correctly.  The HTML::Form
-module also need HTML::TokeParser to work.
+module also needs HTML::TokeParser to work.
 
 EOT
     sleep(2);  # Don't hurry too much

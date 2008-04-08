@@ -1,12 +1,10 @@
 package HTTP::Headers;
 
-# $Id: Headers.pm,v 1.64 2005/12/08 12:11:48 gisle Exp $
-
 use strict;
 use Carp ();
 
 use vars qw($VERSION $TRANSLATE_UNDERSCORE);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.64 $ =~ /(\d+)\.(\d+)/);
+$VERSION = "5.810";
 
 # The $TRANSLATE_UNDERSCORE variable controls whether '_' can be used
 # as a replacement for '-' in header field names.
@@ -260,6 +258,7 @@ sub _date_header
     if (defined $time) {
 	$self->_header($header, HTTP::Date::time2str($time));
     }
+    $old =~ s/;.*// if defined($old);
     HTTP::Date::str2time($old);
 }
 
@@ -290,6 +289,19 @@ sub content_type      {
       $_ = lc($_);
   }
   wantarray ? @ct : $ct[0];
+}
+
+sub _is_html          {
+    my $self = shift;
+    return $self->content_type eq 'text/html' || $self->_is_xhtml;
+}
+
+sub _is_xhtml         {
+    my $ct = shift->content_type;
+    for (qw(application/xhtml+xml application/vnd.wap.xhtml+xml)) {
+        return 1 if $_ eq $ct;
+    }
+    return 0;
 }
 
 sub referer           {
@@ -529,7 +541,7 @@ values will be substituted with this line ending sequence.
 =head1 CONVENIENCE METHODS
 
 The most frequently used headers can also be accessed through the
-following convenience methods.  These methods can both be used to read
+following convenience Methods.  These methods can both be used to read
 and to set the value of a header.  The header value is set if you pass
 an argument to the method.  The old header value is always returned.
 If the given header did not exist then C<undef> is returned.

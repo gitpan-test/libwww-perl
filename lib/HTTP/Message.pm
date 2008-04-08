@@ -1,10 +1,8 @@
 package HTTP::Message;
 
-# $Id: Message.pm,v 1.57 2005/02/18 20:29:01 gisle Exp $
-
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.57 $ =~ /(\d+)\.(\d+)/);
+$VERSION = "5.810";
 
 require HTTP::Headers;
 require Carp;
@@ -13,7 +11,7 @@ my $CRLF = "\015\012";   # "\r\n" is not portable
 $HTTP::URI_CLASS ||= $ENV{PERL_HTTP_URI_CLASS} || "URI";
 eval "require $HTTP::URI_CLASS"; die $@ if $@;
 
-
+*_is_utf8 = defined &utf8::is_utf8 ? \&utf8::is_utf8 : sub { 0 };
 
 sub new
 {
@@ -30,7 +28,14 @@ sub new
     else {
 	$header = HTTP::Headers->new;
     }
-    $content = '' unless defined $content;
+    if (defined $content) {
+        if (_is_utf8($content)) {
+            Carp::croak("HTTP::Message content not bytes");
+        }
+    }
+    else {
+        $content = '';
+    }
 
     bless {
 	'_headers' => $header,
@@ -105,6 +110,9 @@ sub content  {
 
 sub _set_content {
     my $self = $_[0];
+    if (_is_utf8($_[1])) {
+        Carp::croak("HTTP::Message content not bytes")
+    }
     if (!ref($_[1]) && ref($self->{_content}) eq "SCALAR") {
 	${$self->{_content}} = $_[1];
     }
@@ -123,6 +131,10 @@ sub add_content
     $self->_content unless exists $self->{_content};
     my $chunkref = \$_[0];
     $chunkref = $$chunkref if ref($$chunkref);  # legacy
+
+    if (_is_utf8($$chunkref)) {
+        Carp::croak("HTTP::Message added content not bytes");
+    }
 
     my $ref = ref($self->{_content});
     if (!$ref) {
@@ -269,7 +281,7 @@ sub decoded_content
 		    $content_ref_iscopy++;
 		}
 		$content_ref = \Encode::decode($charset, $$content_ref,
-					       Encode::FB_CROAK() | Encode::LEAVE_SRC());
+		     ($opt{charset_strict} ? Encode::FB_CROAK() : 0) | Encode::LEAVE_SRC());
 	    }
 	}
     };
@@ -597,11 +609,17 @@ C<none> can used to suppress decoding of the charset.
 
 This override the default charset of "ISO-8859-1".
 
+=item C<charset_strict>
+
+Abort decoding when if malformed characters is found in the content.  By
+default you get the substitution character ("\x{FFFD}") in place of
+mailformed characters.
+
 =item C<raise_error>
 
 If TRUE then raise an exception if not able to decode content.  Reason
 might be that the specified C<Content-Encoding> or C<charset> is not
-supported.  If this option is FALSE, then decode_content() will return
+supported.  If this option is FALSE, then decoded_content() will return
 C<undef> on errors, but will still set $@.
 
 =item C<ref>

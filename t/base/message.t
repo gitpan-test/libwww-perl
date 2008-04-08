@@ -3,7 +3,7 @@
 use strict;
 use Test qw(plan ok skip);
 
-plan tests => 95;
+plan tests => 100;
 
 require HTTP::Message;
 require Config;
@@ -339,10 +339,10 @@ $m->header("Content-Encoding", "gzip, base64");
 $m->content_type("text/plain; charset=UTF-8");
 $m->content("H4sICFWAq0ECA3h4eAB7v3u/R6ZCSUZqUarCoxm7uAAZKHXiEAAAAA==\n");
 
+my $NO_ENCODE = $] < 5.008 || ($Config::Config{'extensions'} !~ /\bEncode\b/)
+    ? "No Encode module" : "";
 $@ = "";
-skip($] < 5.008 || ($Config::Config{'extensions'} !~ /\bEncode\b/)
-           ? "No Encode module" : "",
-     sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A}\n");
+skip($NO_ENCODE, sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A}\n");
 ok($@ || "", "");
 ok($m->content, "H4sICFWAq0ECA3h4eAB7v3u/R6ZCSUZqUarCoxm7uAAZKHXiEAAAAA==\n");
 
@@ -350,11 +350,15 @@ my $tmp = MIME::Base64::decode($m->content);
 $m->content($tmp);
 $m->header("Content-Encoding", "gzip");
 $@ = "";
-skip($] < 5.008 || ($Config::Config{'extensions'} !~ /\bEncode\b/)
-           ? "No Encode module" : "",
-     sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A}\n");
+skip($NO_ENCODE, sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A}\n");
 ok($@ || "", "");
 ok($m->content, $tmp);
+
+$m->remove_header("Content-Encoding");
+$m->content("a\xFF");
+
+skip($NO_ENCODE, sub { $m->decoded_content }, "a\x{FFFD}");
+skip($NO_ENCODE, sub { $m->decoded_content(charset_strict => 1) }, undef);
 
 $m->header("Content-Encoding", "foobar");
 ok($m->decoded_content, undef);
@@ -367,3 +371,22 @@ eval {
 };
 ok($@ =~ /Don't know how to decode Content-Encoding 'foobar'/);
 ok($err, 0);
+
+if ($] >= 5.008001) {
+    eval {
+        HTTP::Message->new([], "\x{263A}");
+    };
+    ok($@ =~ /bytes/);
+    $m = HTTP::Message->new;
+    eval {
+        $m->add_content("\x{263A}");
+    };
+    ok($@ =~ /bytes/);
+    eval {
+        $m->content("\x{263A}");
+    };
+    ok($@ =~ /bytes/);
+}
+else {
+    skip("Missing is_utf8 test") for 1..3;
+}

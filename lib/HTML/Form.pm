@@ -1,13 +1,11 @@
 package HTML::Form;
 
-# $Id: Form.pm,v 1.54 2005/12/07 14:32:27 gisle Exp $
-
 use strict;
 use URI;
 use Carp ();
 
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%03d", q$Revision: 1.54 $ =~ /(\d+)\.(\d+)/);
+$VERSION = "5.810";
 
 my %form_tags = map {$_ => 1} qw(input textarea button select option);
 
@@ -17,13 +15,13 @@ my %type2class = (
  hidden   => "TextInput",
  textarea => "TextInput",
 
- button   => "IgnoreInput",
  "reset"  => "IgnoreInput",
 
  radio    => "ListInput",
  checkbox => "ListInput",
  option   => "ListInput",
 
+ button   => "SubmitInput",
  submit   => "SubmitInput",
  image    => "ImageInput",
  file     => "FileInput",
@@ -117,7 +115,7 @@ sub parse
     my $p = HTML::TokeParser->new(ref($html) ? $html->decoded_content(ref => 1) : \$html);
     eval {
 	# optimization
-	$p->report_tags(qw(form input textarea select optgroup option keygen label));
+	$p->report_tags(qw(form input textarea select optgroup option keygen label button));
     };
 
     my $base_uri = delete $opt{base};
@@ -183,6 +181,10 @@ sub parse
 		    my $type = delete $attr->{type} || "text";
 		    $f->push_input($type, $attr);
 		}
+                elsif ($tag eq "button") {
+                    my $type = delete $attr->{type} || "submit";
+                    $f->push_input($type, $attr);
+                }
 		elsif ($tag eq "textarea") {
 		    $attr->{textarea_value} = $attr->{value}
 		        if exists $attr->{value};
@@ -903,7 +905,7 @@ sub form_name_value
     my $self = shift;
     my $name = $self->{'name'};
     return unless defined $name;
-    return if $self->{disabled};
+    return if $self->disabled;
     my $value = $self->value;
     return unless defined $value;
     return ($name => $value);
@@ -964,7 +966,11 @@ sub value
     if (@_) {
         Carp::carp("Input '$self->{name}' is readonly")
 	    if $^W && $self->{readonly};
-	$self->{value} = shift;
+        my $new = shift;
+        my $n = exists $self->{maxlength} ? $self->{maxlength} : undef;
+        Carp::carp("Input '$self->{name}' has maxlength '$n'")
+	    if $^W && defined($n) && defined($new) && length($new) > $n;
+	$self->{value} = $new;
     }
     $old;
 }

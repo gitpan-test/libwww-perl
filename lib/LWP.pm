@@ -1,9 +1,6 @@
-#
-# $Id: LWP.pm,v 1.152 2007/08/05 13:23:32 gisle Exp $
-
 package LWP;
 
-$VERSION = "5.808";
+$VERSION = "5.810";
 sub Version { $VERSION; }
 
 require 5.005;
@@ -639,7 +636,7 @@ libwww-perl-0.40 library for details.
 
 =head1 COPYRIGHT
 
-  Copyright 1995-2005, Gisle Aas
+  Copyright 1995-2008, Gisle Aas
   Copyright 1995, Martijn Koster
 
 This library is free software; you can redistribute it and/or
@@ -650,7 +647,7 @@ modify it under the same terms as Perl itself.
 The latest version of this library is likely to be available from CPAN
 as well as:
 
- http://www.linpro.no/lwp/
+  http://gitorious.org/projects/libwww-perl
 
 The best place to discuss this code is on the <libwww@perl.org>
 mailing list.

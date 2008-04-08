@@ -1,0 +1,18 @@
+--- #YAML:1.0
+name:                libwww-perl
+version:             5.810
+abstract:            ~
+license:             ~
+generated_by:        ExtUtils::MakeMaker version 6.3201
+distribution_type:   module
+requires:     
+    Compress::Zlib:                1.10
+    Digest::MD5:                   0
+    HTML::Parser:                  3.33
+    HTML::Tagset:                  0
+    MIME::Base64:                  2.1
+    Net::FTP:                      2.58
+    URI:                           1.10
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2

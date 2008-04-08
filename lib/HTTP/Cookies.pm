@@ -6,7 +6,7 @@ use HTTP::Headers::Util qw(split_header_words join_header_words);
 use LWP::Debug ();
 
 use vars qw($VERSION $EPOCH_OFFSET);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.39 $ =~ /(\d+)\.(\d+)/);
+$VERSION = "5.810";
 
 # Legacy: because "use "HTTP::Cookies" used be the ONLY way
 #  to load the class HTTP::Cookies::Netscape.
@@ -199,7 +199,7 @@ sub extract_cookies
 
     if (@ns_set) {
 	# The old Netscape cookie format for Set-Cookie
-        # http://www.netscape.com/newsref/std/cookie_spec.html
+	# http://wp.netscape.com/newsref/std/cookie_spec.html
 	# can for instance contain an unquoted "," in the expires
 	# field, so we have to use this ad-hoc parser.
 	my $now = time();
@@ -240,6 +240,7 @@ sub extract_cookies
 		}
 		$first_param = 0;
 	    }
+            next unless @cur;
 	    next if $in_set2{$cur[0]};
 
 #	    push(@cur, "Port" => $req_port);
@@ -626,7 +627,7 @@ knows about.
 Cookies are a general mechanism which server side connections can use
 to both store and retrieve information on the client side of the
 connection.  For more information about cookies refer to
-<URL:http://www.netscape.com/newsref/std/cookie_spec.html> and
+<URL:http://wp.netscape.com/newsref/std/cookie_spec.html> and
 <URL:http://www.cookiecentral.com/>.  This module also implements the
 new style cookies described in I<RFC 2965>.
 The two variants of cookies are supposed to be able to coexist happily.

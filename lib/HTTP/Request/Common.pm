@@ -13,7 +13,7 @@ require Exporter;
 require HTTP::Request;
 use Carp();
 
-$VERSION = "5.810";
+$VERSION = "5.811";
 
 my $CRLF = "\015\012";   # "\r\n" is not portable
 
@@ -104,6 +104,7 @@ sub _simple_req
     while (($k,$v) = splice(@_, 0, 2)) {
 	if (lc($k) eq 'content') {
 	    $req->add_content($v);
+            $req->header("Content-Length", length(${$req->content_ref}));
 	}
 	else {
 	    $req->push_header($k, $v);
@@ -134,7 +135,7 @@ sub form_data   # RFC1867
 	    }
             $k =~ s/([\\\"])/\\$1/g;
 	    my $disp = qq(form-data; name="$k");
-            if ($usename) {
+            if (defined($usename) and length($usename)) {
                 $usename =~ s/([\\\"])/\\$1/g;
                 $disp .= qq(; filename="$usename");
             }

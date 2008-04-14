@@ -3,10 +3,10 @@
 use strict;
 use Test qw(plan ok skip);
 
-plan tests => 100;
+plan tests => 102;
 
 require HTTP::Message;
-require Config;
+use Config qw(%Config);
 
 my($m, $m2, @parts);
 
@@ -339,7 +339,7 @@ $m->header("Content-Encoding", "gzip, base64");
 $m->content_type("text/plain; charset=UTF-8");
 $m->content("H4sICFWAq0ECA3h4eAB7v3u/R6ZCSUZqUarCoxm7uAAZKHXiEAAAAA==\n");
 
-my $NO_ENCODE = $] < 5.008 || ($Config::Config{'extensions'} !~ /\bEncode\b/)
+my $NO_ENCODE = $] < 5.008 || ($Config{'extensions'} !~ /\bEncode\b/)
     ? "No Encode module" : "";
 $@ = "";
 skip($NO_ENCODE, sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A}\n");
@@ -389,4 +389,16 @@ if ($] >= 5.008001) {
 }
 else {
     skip("Missing is_utf8 test") for 1..3;
+}
+
+# test the add_content_utf8 method
+if ($] >= 5.008001) {
+    $m = HTTP::Message->new(["Content-Type", "text/plain; charset=UTF-8"]);
+    $m->add_content_utf8("\x{263A}");
+    $m->add_content_utf8("-\xC5");
+    ok($m->content, "\xE2\x98\xBA-\xC3\x85");
+    ok($m->decoded_content, "\x{263A}-\x{00C5}");
+}
+else {
+    skip("Missing is_utf8 test") for 1..2;
 }

@@ -2,7 +2,7 @@ package HTTP::Response;
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = "5.810";
+$VERSION = "5.811";
 
 use strict;
 use HTTP::Status ();
@@ -310,7 +310,7 @@ headers.
 
 =item $r->content
 
-=item $r->content( $content )
+=item $r->content( $bytes )
 
 This is used to get/set the raw content and it is inherited from the
 C<HTTP::Message> base class.  See L<HTTP::Message> for details and

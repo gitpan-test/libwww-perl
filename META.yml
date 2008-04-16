@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                libwww-perl
-version:             5.811
+version:             5.812
 abstract:            ~
 license:             ~
 generated_by:        ExtUtils::MakeMaker version 6.3201

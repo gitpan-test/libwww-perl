@@ -1,6 +1,6 @@
 #!./perl -w
 
-print "1..14\n";
+print "1..15\n";
 
 use strict;
 #use Data::Dump ();
@@ -29,10 +29,6 @@ my $LF   = "\012";
 	${*$self}{server} = $server;
 	${*$self}{read_chunk_size} = $cnf->{ReadChunkSize};
 	return $self;
-    }
-
-    sub peerport {
-	return 80;
     }
 
     sub print {
@@ -153,7 +149,7 @@ print "not " unless $res->{error} =~ /Bad header/ && !$res->{code};
 print "ok 6\n";
 $h = undef;  # it is in a bad state now
 
-$h = HTTP->new(Host => "a") || die;  # reconnect
+$h = HTTP->new("a") || die;  # reconnect
 $res = $h->request(GET => "/09", [], {laxed => 1});
 print "not " unless $res->{code} eq "200" && $res->{message} eq "Assumed OK" &&
                     $res->{content} eq "Hello${CRLF}World!${CRLF}" &&
@@ -196,3 +192,12 @@ print "ok 13\n";
 $res = $h->request(TRACE => "/");
 print "not " unless $res->{code} eq "200" && $res->{content} eq "TRACE / HTTP/1.0\r\n\r\n";
 print "ok 14\n";
+
+require Net::HTTP;
+eval {
+    $h = Net::HTTP->new;
+};
+print "# $@";
+print "not " unless $@;
+print "ok 15\n";
+

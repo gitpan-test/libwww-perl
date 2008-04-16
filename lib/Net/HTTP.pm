@@ -3,11 +3,18 @@ package Net::HTTP;
 use strict;
 use vars qw($VERSION @ISA);
 
-$VERSION = "5.811";
+$VERSION = "5.812";
 eval { require IO::Socket::INET } || require IO::Socket;
 require Net::HTTP::Methods;
+require Carp;
 
 @ISA=qw(IO::Socket::INET Net::HTTP::Methods);
+
+sub new {
+    my $class = shift;
+    Carp::croak("No Host option provided") unless @_;
+    $class->SUPER::new(@_);
+}
 
 sub configure {
     my($self, $cnf) = @_;

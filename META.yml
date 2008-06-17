@@ -1,9 +1,10 @@
 --- #YAML:1.0
 name:                libwww-perl
-version:             5.812
+version:             5.813
 abstract:            ~
 license:             ~
-generated_by:        ExtUtils::MakeMaker version 6.3201
+author:              ~
+generated_by:        ExtUtils::MakeMaker version 6.42_01
 distribution_type:   module
 requires:     
     Compress::Zlib:                1.10
@@ -14,5 +15,5 @@ requires:
     Net::FTP:                      2.58
     URI:                           1.10
 meta-spec:
-    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
-    version: 1.2
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

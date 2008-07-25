@@ -2,7 +2,7 @@ package HTTP::Message;
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = "5.812";
+$VERSION = "5.814";
 
 require HTTP::Headers;
 require Carp;
@@ -301,6 +301,26 @@ sub decoded_content
 }
 
 
+sub decodable
+{
+    # should match the Content-Encoding values that decoded_content can deal with
+    my $self = shift;
+    my @enc;
+    # XXX preferably we should deterine if the modules are available without loading
+    # them here
+    eval {
+        require Compress::Zlib;
+        push(@enc, "gzip", "x-gzip", "deflate");
+    };
+    eval {
+        require Compess::Bzip2;
+        push(@enc, "x-bzip2");
+    };
+    # we don't care about announcing the 'base64' and 'quoted-printable' stuff
+    return wantarray ? @enc : join(", ", @enc);
+}
+
+
 sub as_string
 {
     my($self, $eol) = @_;
@@ -353,7 +373,10 @@ sub add_part {
 	my $p = HTTP::Message->new($self->remove_content_headers,
 				   $self->content(""));
 	$self->content_type("multipart/mixed");
-	$self->{_parts} = [$p];
+	$self->{_parts} = [];
+        if ($p->headers->header_field_names || $p->content ne "") {
+            push(@{$self->{_parts}}, $p);
+        }
     }
     elsif (!exists $self->{_parts} || ref($self->{_content}) eq "SCALAR") {
 	$self->_parts;
@@ -642,6 +665,17 @@ the raw content as no data copying is required in this case.
 
 =back
 
+=item $mess->decodeable
+
+=item HTTP::Message::decodeable()
+
+This returns the encoding identifiers that decoded_content() can
+process.  In scalar context returns a comma separated string of
+identifiers.
+
+This value is suitable for initializing the C<Accept-Encoding> request
+header field.
+
 =item $mess->parts
 
 =item $mess->parts( @parts )
@@ -656,7 +690,7 @@ The argumentless form will return a list of C<HTTP::Message> objects.
 If the content type of $msg is not C<multipart/*> or C<message/*> then
 this will return the empty list.  In scalar context only the first
 object is returned.  The returned message parts should be regarded as
-are read only (future versions of this library might make it possible
+read-only (future versions of this library might make it possible
 to modify the parent by modifying the parts).
 
 If the content type of $msg is C<message/*> then there will only be

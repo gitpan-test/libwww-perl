@@ -2,7 +2,7 @@ package HTTP::Request;
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = "5.811";
+$VERSION = "5.814";
 
 use strict;
 
@@ -86,6 +86,12 @@ sub uri
 
 *url = \&uri;  # legacy
 
+
+sub accept_decodable
+{
+    my $self = shift;
+    $self->header("Accept-Encoding", scalar($self->decodable));
+}
 
 sub as_string
 {
@@ -175,6 +181,11 @@ This is used to get/set header values and it is inherited from
 C<HTTP::Headers> via C<HTTP::Message>.  See L<HTTP::Headers> for
 details and other similar methods that can be used to access the
 headers.
+
+=item $r->accept_decodable
+
+This will set the C<Accept-Encoding> header to the list of encodings
+that decoded_content() can decode.
 
 =item $r->content
 

@@ -5,7 +5,7 @@ use URI;
 use Carp ();
 
 use vars qw($VERSION);
-$VERSION = "5.813";
+$VERSION = "5.814";
 
 my %form_tags = map {$_ => 1} qw(input textarea button select option);
 
@@ -114,10 +114,6 @@ sub parse
     require HTML::TokeParser;
     my $p = HTML::TokeParser->new(ref($html) ? $html->decoded_content(ref => 1) : \$html);
     die "Failed to create HTML::TokeParser object" unless $p;
-    eval {
-	# optimization
-	$p->report_tags(qw(form input textarea select optgroup option keygen label button));
-    };
 
     my $base_uri = delete $opt{base};
     my $verbose = delete $opt{verbose};
@@ -1190,13 +1186,13 @@ sub check
 sub possible_values
 {
     my $self = shift;
-    map $_->{value}, @{$self->{menu}};
+    map $_->{value}, grep !$_->{disabled}, @{$self->{menu}};
 }
 
 sub other_possible_values
 {
     my $self = shift;
-    map $_->{value}, grep !$_->{seen}, @{$self->{menu}};
+    map $_->{value}, grep !$_->{seen} && !$_->{disabled}, @{$self->{menu}};
 }
 
 sub value_names {

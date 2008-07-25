@@ -1,7 +1,7 @@
 package File::Listing;
 
 sub Version { $VERSION; }
-$VERSION = "5.810";
+$VERSION = "5.814";
 
 require Exporter;
 @ISA = qw(Exporter);
@@ -114,8 +114,7 @@ package File::Listing::unix;
 use HTTP::Date qw(str2time);
 
 # A place to remember current directory from last line parsed.
-use vars qw($curdir);
-no strict qw(vars);
+use vars qw($curdir @ISA);
 
 @ISA = qw(File::Listing);
 
@@ -142,7 +141,7 @@ sub line
 	 .*                                       # Graps
 	 \D(\d+)                                  # File size
 	 \s+                                      # Some space
-	 (\w{3}\s+\d+\s+(?:\d{1,2}:\d{2}|\d{4}))  # Date
+	 (\w{3}\s+\d+\s+(?:\d{1,2}:\d{2}|\d{4})|\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})  # Date
 	 \s+                                      # Some more space
 	 (.*)$                                    # File name
 	/x )
@@ -197,6 +196,7 @@ sub line
     }
     else {
         # parse failed, check if the dosftp parse understands it
+        File::Listing::dosftp->init();
         return(File::Listing::dosftp->line($_,$tz,$error));
     }
 
@@ -209,8 +209,7 @@ package File::Listing::dosftp;
 use HTTP::Date qw(str2time);
 
 # A place to remember current directory from last line parsed.
-use vars qw($curdir);
-no strict qw(vars);
+use vars qw($curdir @ISA);
 
 @ISA = qw(File::Listing);
 
@@ -230,11 +229,11 @@ sub line
 
     s/\015//g;
 
-    my ($kind, $size, $date, $name);
+    my ($date, $size_or_dir, $name, $size);
 
     # 02-05-96  10:48AM                 1415 src.slf
     # 09-10-96  09:18AM       <DIR>          sl_util
-    if (($date,$size_or_dir,$name) =
+    if (($date, $size_or_dir, $name) =
         /^(\d\d-\d\d-\d\d\s+\d\d:\d\d\wM)         # Date and time info
          \s+                                      # Some space
          (<\w{3}>|\d+)                            # Dir or Size
@@ -253,9 +252,7 @@ sub line
 	    $type = 'f';
             $size = $size_or_dir;
 	}
-	return [$name, $type, $size, str2time($date, $tz),
-              File::Listing::file_mode($kind)];
-
+	return [$name, $type, $size, str2time($date, $tz), undef];
     }
     else {
 	return () unless defined $error;
@@ -277,6 +274,8 @@ package File::Listing::netware;
 
 
 package File::Listing::apache;
+
+use vars qw(@ISA);
 
 @ISA = qw(File::Listing);
 
@@ -356,6 +355,7 @@ File::Listing - parse directory listing
 =head1 SYNOPSIS
 
  use File::Listing qw(parse_dir);
+ $ENV{LANG} = "C";  # dates in non-English locales not supported
  for (parse_dir(`ls -l`)) {
      ($name, $type, $size, $mtime, $mode) = @$_;
      next if $type ne 'f'; # plain file
@@ -369,10 +369,7 @@ File::Listing - parse directory listing
 =head1 DESCRIPTION
 
 This module exports a single function called parse_dir(), which can be
-used to parse directory listings. Currently it only understand Unix
-C<'ls -l'> and C<'ls -lR'> format.  It should eventually be able to
-most things you might get back from a ftp server file listing (LIST
-command), i.e. VMS listings, NT listings, DOS listings,...
+used to parse directory listings.
 
 The first parameter to parse_dir() is the directory listing to parse.
 It can be a scalar, a reference to an array of directory lines or a
@@ -382,10 +379,10 @@ The second parameter is the time zone to use when parsing time stamps
 in the listing. If this value is undefined, then the local time zone is
 assumed.
 
-The third parameter is the type of listing to assume.  The values will
-be strings like 'unix', 'vms', 'dos'.  Currently only 'unix' is
-implemented and this is also the default value.  Ideally, the listing
-type should be determined automatically.
+The third parameter is the type of listing to assume.  Currently
+supported formats are 'unix', 'apache' and 'dosftp'.  The default
+value 'unix'.  Ideally, the listing type should be determined
+automatically.
 
 The fourth parameter specifies how unparseable lines should be treated.
 Values can be 'ignore', 'warn' or a code reference.  Warn means that

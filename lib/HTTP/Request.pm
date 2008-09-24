@@ -2,7 +2,7 @@ package HTTP::Request;
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = "5.814";
+$VERSION = "5.815";
 
 use strict;
 
@@ -80,11 +80,18 @@ sub uri
 	    $uri = $HTTP::URI_CLASS->new($uri);
 	}
 	$self->{'_uri'} = $uri;
+        delete $self->{'_uri_canonical'};
     }
     $old;
 }
 
 *url = \&uri;  # legacy
+
+sub uri_canonical
+{
+    my $self = shift;
+    return $self->{'_uri_canonical'} ||= $self->{'_uri'}->canonical;
+}
 
 
 sub accept_decodable

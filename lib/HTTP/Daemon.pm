@@ -3,7 +3,7 @@ package HTTP::Daemon;
 use strict;
 use vars qw($VERSION @ISA $PROTO $DEBUG);
 
-$VERSION = "5.810";
+$VERSION = "5.815";
 
 use IO::Socket qw(AF_INET INADDR_ANY inet_ntoa);
 @ISA=qw(IO::Socket::INET);
@@ -194,6 +194,7 @@ sub get_request
     for my $e ( $r->header('Expect') ) {
         if( lc($e) eq '100-continue' ) {
             $self->send_status_line(100);
+            $self->send_crlf;
         }
         else {
             $self->send_error(417);
@@ -716,7 +717,7 @@ of C<HTTP::Daemon>.  The following methods are provided:
 
 =item $c->get_request( $headers_only )
 
-This method read data from the client and turns it into an
+This method reads data from the client and turns it into an
 C<HTTP::Request> object which is returned.  It returns C<undef>
 if reading fails.  If it fails, then the C<HTTP::Daemon::ClientConn>
 object ($c) should be discarded, and you should not try call this
@@ -749,7 +750,7 @@ empty this buffer before you read more and you need to place
 unconsumed bytes here.  You also need this buffer if you implement
 services like I<101 Switching Protocols>.
 
-This method always return the old buffer content and can optionally
+This method always returns the old buffer content and can optionally
 replace the buffer content if you pass it an argument.
 
 =item $c->reason

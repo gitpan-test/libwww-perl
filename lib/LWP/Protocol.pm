@@ -2,7 +2,7 @@ package LWP::Protocol;
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.815";
+$VERSION = "5.816";
 
 use strict;
 use Carp ();
@@ -102,6 +102,7 @@ sub collect
         }
         elsif (!ref($arg) && length($arg)) {
             open(my $fh, ">", $arg) || die "Can't write to '$arg': $!";
+	    binmode($fh);
             push(@{$response->{handlers}{response_data}}, sub {
                 print $fh $_[3] || die "Can't write to '$arg': $!";
                 1;

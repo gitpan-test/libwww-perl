@@ -2,7 +2,7 @@ package HTTP::Message;
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = "5.815";
+$VERSION = "5.817";
 
 require HTTP::Headers;
 require Carp;
@@ -68,7 +68,7 @@ sub parse
 	    last;
 	}
     }
-
+    local $HTTP::Headers::TRANSLATE_UNDERSCORE;
     new($class, \@hdr, $str);
 }
 
@@ -188,8 +188,6 @@ sub decoded_content
 	my($ct, %ct_param);
 	if (my @ct = HTTP::Headers::Util::split_header_words($self->header("Content-Type"))) {
 	    ($ct, undef, %ct_param) = @{$ct[-1]};
-	    $ct = lc($ct);
-
 	    die "Can't decode multipart content" if $ct =~ m,^multipart/,;
 	}
 
@@ -200,7 +198,8 @@ sub decoded_content
 	    $h =~ s/^\s+//;
 	    $h =~ s/\s+$//;
 	    for my $ce (reverse split(/\s*,\s*/, lc($h))) {
-		next unless $ce || $ce eq "identity";
+		next unless $ce;
+		next if $ce eq "identity";
 		if ($ce eq "gzip" || $ce eq "x-gzip") {
 		    require Compress::Zlib;
 		    unless ($content_ref_iscopy) {
@@ -321,6 +320,60 @@ sub decodable
 }
 
 
+sub decode
+{
+    my $self = shift;
+    return 1 unless $self->header("Content-Encoding");
+    if (defined(my $content = $self->decoded_content(charset => "none"))) {
+	$self->remove_header("Content-Encoding");
+	$self->content($content);
+	return 1;
+    }
+    return 0;
+}
+
+
+sub encode
+{
+    my($self, @enc) = @_;
+
+    Carp::croak("Can't encode multipart/* messages") if $self->content_type =~ m,^multipart/,;
+    Carp::croak("Can't encode message/* messages") if $self->content_type =~ m,^message/,;
+
+    return 1 unless @enc;  # nothing to do
+
+    my $content = $self->content;
+    for my $encoding (@enc) {
+	if ($encoding eq "identity") {
+	    # noting to do
+	}
+	elsif ($encoding eq "base64") {
+	    require MIME::Base64;
+	    $content = MIME::Base64::encode($content);
+	}
+	elsif ($encoding eq "gzip" || $encoding eq "x-gzip") {
+	    require Compress::Zlib;
+	    $content = Compress::Zlib::memGzip($content);
+	}
+	elsif ($encoding eq "deflate") {
+	    require Compress::Zlib;
+	    $content = Compress::Zlib::compress($content);
+	}
+	elsif ($encoding eq "rot13") {  # for the fun of it
+	    $content =~ tr/A-Za-z/N-ZA-Mn-za-m/;
+	}
+	else {
+	    return 0;
+	}
+    }
+    my $h = $self->header("Content-Encoding");
+    unshift(@enc, $h) if $h;
+    $self->header("Content-Encoding", join(", ", @enc));
+    $self->content($content);
+    return 1;
+}
+
+
 sub as_string
 {
     my($self, $eol) = @_;
@@ -405,14 +458,16 @@ sub _stale_content {
 sub AUTOLOAD
 {
     my $method = substr($AUTOLOAD, rindex($AUTOLOAD, '::')+2);
-    return if $method eq "DESTROY";
 
     # We create the function here so that it will not need to be
     # autoloaded the next time.
     no strict 'refs';
-    *$method = eval "sub { shift->{'_headers'}->$method(\@_) }";
+    *$method = sub { shift->{'_headers'}->$method(@_) };
     goto &$method;
 }
+
+
+sub DESTROY {}  # avoid AUTOLOADing it
 
 
 # Private method to access members in %$self
@@ -478,7 +533,7 @@ sub _content {
     my $boundary_index;
     for (my @tmp = @v; @tmp;) {
 	my($k, $v) = splice(@tmp, 0, 2);
-	if (lc($k) eq "boundary") {
+	if ($k eq "boundary") {
 	    $boundary = $v;
 	    $boundary_index = @v - @tmp - 1;
 	    last;
@@ -675,6 +730,31 @@ identifiers.
 
 This value is suitable for initializing the C<Accept-Encoding> request
 header field.
+
+=item $mess->decode
+
+This method tries to replace the content of the message with the
+decoded version and removes the C<Content-Encoding> header.  Return
+TRUE if successful and FALSE if not.
+
+If the message does not have a C<Content-Encoding> header this method
+does nothing and returns TRUE.
+
+Note that the content of the message is still bytes after this method
+has been called and you still need to call decoded_content() if you
+want to process its content as a string.
+
+=item $mess->encode( $encoding, ... )
+
+Apply the given encodings to the content of the message.  Returns TRUE
+if successful. Currently supported encodings are "gzip", "deflate" and
+"base64".
+
+A successful call to this function will set the C<Content-Encoding>
+header.
+
+Note that C<multipart/*> or C<message/*> messages can't be encoded and
+this method will croak if you try.
 
 =item $mess->parts
 

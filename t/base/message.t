@@ -3,7 +3,7 @@
 use strict;
 use Test qw(plan ok skip);
 
-plan tests => 104;
+plan tests => 110;
 
 require HTTP::Message;
 use Config qw(%Config);
@@ -48,6 +48,8 @@ $m = HTTP::Message->parse("foo");
 ok($m->as_string, "\nfoo\n");
 $m = HTTP::Message->parse("foo: 1");
 ok($m->as_string, "Foo: 1\n\n");
+$m = HTTP::Message->parse("foo_bar: 1");
+ok($m->as_string, "Foo_bar: 1\n\n");
 $m = HTTP::Message->parse("foo: 1\n\nfoo");
 ok($m->as_string, "Foo: 1\n\nfoo\n");
 $m = HTTP::Message->parse(<<EOT);
@@ -362,6 +364,11 @@ skip($NO_ENCODE, sub { eval { $m->decoded_content } }, "\x{FEFF}Hi there \x{263A
 ok($@ || "", "");
 ok($m->content, "H4sICFWAq0ECA3h4eAB7v3u/R6ZCSUZqUarCoxm7uAAZKHXiEAAAAA==\n");
 
+$m2 = $m->clone;
+ok($m2->decode);
+ok($m2->header("Content-Encoding"), undef);
+ok($m2->content, qr/Hi there/);
+
 ok(grep { $_ eq "gzip" } $m->decodable);
 
 my $tmp = MIME::Base64::decode($m->content);
@@ -420,3 +427,18 @@ if ($] >= 5.008001) {
 else {
     skip("Missing is_utf8 test", undef) for 1..2;
 }
+
+$m = HTTP::Message->new([
+    "Content-Type", "text/plain"
+    ],
+    "Hello world!"
+);
+$m->encode("gzip");
+$m->encode("base64", "identity");
+ok($m->as_string, <<'EOT');
+Content-Encoding: gzip, base64, identity
+Content-Type: text/plain
+
+H4sIAAAAAAAA//NIzcnJVyjPL8pJUQQAlRmFGwwAAAA=
+EOT
+ok($m->decoded_content, "Hello world!");

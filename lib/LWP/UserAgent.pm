@@ -5,7 +5,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.816";
+$VERSION = "5.817";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -165,7 +165,7 @@ sub send_request
             $protocol = eval { LWP::Protocol::create($scheme, $self) };
             if ($@) {
                 $@ =~ s/ at .* line \d+.*//s;  # remove file/line number
-                my $response =  _new_response($request, &HTTP::Status::RC_NOT_IMPLEMENTED, $@);
+                $response =  _new_response($request, &HTTP::Status::RC_NOT_IMPLEMENTED, $@);
                 if ($scheme eq "https") {
                     $response->message($response->message . " (Crypt::SSLeay not installed)");
                     $response->content_type("text/plain");
@@ -210,24 +210,10 @@ EOT
 sub prepare_request
 {
     my($self, $request) = @_;
-    # sanity check the request passed in
-    if (defined $request) {
-	if (ref $request) {
-	    Carp::croak("You need a request object, not a " . ref($request) . " object")
-	      if ref($request) eq 'ARRAY' or ref($request) eq 'HASH' or
-		 !$request->can('method') or !$request->can('uri');
-	}
-	else {
-	    Carp::croak("You need a request object, not '$request'");
-	}
-    }
-    else {
-        Carp::croak("No request object passed in");
-    }
-    Carp::croak("Bad request: Method missing") unless $request->method;
+    die "Method missing" unless $request->method;
     my $url = $request->url;
-    Carp::croak("Bad request: URL missing") unless $url;
-    Carp::croak("Bad request: URL must be absolute") unless $url->scheme;
+    die "URL missing" unless $url;
+    die "URL must be absolute" unless $url->scheme;
 
     $self->run_handlers("request_preprepare", $request);
 
@@ -253,7 +239,29 @@ sub prepare_request
 sub simple_request
 {
     my($self, $request, $arg, $size) = @_;
-    $request = $self->prepare_request($request);
+
+    # sanity check the request passed in
+    if (defined $request) {
+	if (ref $request) {
+	    Carp::croak("You need a request object, not a " . ref($request) . " object")
+	      if ref($request) eq 'ARRAY' or ref($request) eq 'HASH' or
+		 !$request->can('method') or !$request->can('uri');
+	}
+	else {
+	    Carp::croak("You need a request object, not '$request'");
+	}
+    }
+    else {
+        Carp::croak("No request object passed in");
+    }
+
+    eval {
+	$request = $self->prepare_request($request);
+    };
+    if ($@) {
+	$@ =~ s/ at .* line \d+.*//s;  # remove file/line number
+	return _new_response($request, &HTTP::Status::RC_BAD_REQUEST, $@);
+    }
     return $self->send_request($request, $arg, $size);
 }
 
@@ -356,12 +364,9 @@ sub request
 	CHALLENGE: for my $challenge (@challenge) {
 	    $challenge =~ tr/,/;/;  # "," is used to separate auth-params!!
 	    ($challenge) = HTTP::Headers::Util::split_header_words($challenge);
-	    my $scheme = lc(shift(@$challenge));
+	    my $scheme = shift(@$challenge);
 	    shift(@$challenge); # no value
 	    $challenge = { @$challenge };  # make rest into a hash
-	    for (keys %$challenge) {       # make sure all keys are lower case
-		$challenge->{lc $_} = delete $challenge->{$_};
-	    }
 
 	    unless ($scheme =~ /^([a-z]+(?:-[a-z]+)*)$/) {
 		$response->header("Client-Warning" => 
@@ -1354,8 +1359,9 @@ certain headers to specific requests.
 The method can assign a new request object to $_[0] to replace the
 request that is sent fully.
 
-The return value from the callback is ignored.  Exceptions are
-not trapped and are propagated to the outer request method.
+The return value from the callback is ignored.  If an exceptions is
+raised it will abort the request and make the request method return a
+"400 Bad request" response.
 
 =item request_send => sub { my($request, $ua, $h) = @_; ... }
 

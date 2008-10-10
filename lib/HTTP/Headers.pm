@@ -4,7 +4,7 @@ use strict;
 use Carp ();
 
 use vars qw($VERSION $TRANSLATE_UNDERSCORE);
-$VERSION = "5.815";
+$VERSION = "5.817";
 
 # The $TRANSLATE_UNDERSCORE variable controls whether '_' can be used
 # as a replacement for '-' in header field names.
@@ -17,34 +17,34 @@ $TRANSLATE_UNDERSCORE = 1 unless defined $TRANSLATE_UNDERSCORE;
 #    - Entity-Headers
 
 my @general_headers = qw(
-   Cache-Control Connection Date Pragma Trailer Transfer-Encoding Upgrade
-   Via Warning
+    Cache-Control Connection Date Pragma Trailer Transfer-Encoding Upgrade
+    Via Warning
 );
 
 my @request_headers = qw(
-   Accept Accept-Charset Accept-Encoding Accept-Language
-   Authorization Expect From Host
-   If-Match If-Modified-Since If-None-Match If-Range If-Unmodified-Since
-   Max-Forwards Proxy-Authorization Range Referer TE User-Agent
+    Accept Accept-Charset Accept-Encoding Accept-Language
+    Authorization Expect From Host
+    If-Match If-Modified-Since If-None-Match If-Range If-Unmodified-Since
+    Max-Forwards Proxy-Authorization Range Referer TE User-Agent
 );
 
 my @response_headers = qw(
-   Accept-Ranges Age ETag Location Proxy-Authenticate Retry-After Server
-   Vary WWW-Authenticate
+    Accept-Ranges Age ETag Location Proxy-Authenticate Retry-After Server
+    Vary WWW-Authenticate
 );
 
 my @entity_headers = qw(
-   Allow Content-Encoding Content-Language Content-Length Content-Location
-   Content-MD5 Content-Range Content-Type Expires Last-Modified
+    Allow Content-Encoding Content-Language Content-Length Content-Location
+    Content-MD5 Content-Range Content-Type Expires Last-Modified
 );
 
 my %entity_header = map { lc($_) => 1 } @entity_headers;
 
 my @header_order = (
-   @general_headers,
-   @request_headers,
-   @response_headers,
-   @entity_headers,
+    @general_headers,
+    @request_headers,
+    @response_headers,
+    @entity_headers,
 );
 
 # Make alternative representations of @header_order.  This is used
@@ -97,8 +97,11 @@ sub clear
 
 sub push_header
 {
-    Carp::croak('Usage: $h->push_header($field, $val)') if @_ != 3;
-    shift->_header(@_, 'PUSH');
+    my $self = shift;
+    return $self->_header(@_, 'PUSH_H') if @_ == 2;
+    while (@_) {
+	$self->_header(splice(@_, 0, 2), 'PUSH_H');
+    }
 }
 
 
@@ -143,9 +146,6 @@ sub _header
 {
     my($self, $field, $val, $op) = @_;
 
-    # $push is only used interally sub push_header
-    Carp::croak('Need a field name') unless length($field);
-
     unless ($field =~ /^:/) {
 	$field =~ tr/_/-/ if $TRANSLATE_UNDERSCORE;
 	my $old = $field;
@@ -157,10 +157,26 @@ sub _header
 	}
     }
 
+    $op ||= defined($val) ? 'SET' : 'GET';
+    if ($op eq 'PUSH_H') {
+	# Like PUSH but where we don't care about the return value
+	if (exists $self->{$field}) {
+	    my $h = $self->{$field};
+	    if (ref($h) eq 'ARRAY') {
+		push(@$h, ref($val) eq "ARRAY" ? @$val : $val);
+	    }
+	    else {
+		$self->{$field} = [$h, ref($val) eq "ARRAY" ? @$val : $val]
+	    }
+	    return;
+	}
+	$self->{$field} = $val;
+	return;
+    }
+
     my $h = $self->{$field};
     my @old = ref($h) eq 'ARRAY' ? @$h : (defined($h) ? ($h) : ());
 
-    $op ||= defined($val) ? 'SET' : 'GET';
     unless ($op eq 'GET' || ($op eq 'INIT' && @old)) {
 	if (defined($val)) {
 	    my @new = ($op eq 'PUSH') ? @old : ();
@@ -281,14 +297,17 @@ sub client_date         { shift->_date_header('Client-Date',         @_); }
 #sub retry_after       { shift->_date_header('Retry-After',       @_); }
 
 sub content_type      {
-  my $ct = (shift->_header('Content-Type', @_))[0];
-  return '' unless defined($ct) && length($ct);
-  my @ct = split(/;\s*/, $ct, 2);
-  for ($ct[0]) {
-      s/\s+//g;
-      $_ = lc($_);
-  }
-  wantarray ? @ct : $ct[0];
+    my $self = shift;
+    my $ct = $self->{'content-type'};
+    $self->{'content-type'} = shift if @_;
+    $ct = $ct->[0] if ref($ct) eq 'ARRAY';
+    return '' unless defined($ct) && length($ct);
+    my @ct = split(/;\s*/, $ct, 2);
+    for ($ct[0]) {
+	s/\s+//g;
+	$_ = lc($_);
+    }
+    wantarray ? @ct : $ct[0];
 }
 
 sub content_is_html {
@@ -298,9 +317,15 @@ sub content_is_html {
 
 sub content_is_xhtml {
     my $ct = shift->content_type;
-    for (qw(application/xhtml+xml application/vnd.wap.xhtml+xml)) {
-        return 1 if $_ eq $ct;
-    }
+    return $ct eq "application/xhtml+xml" ||
+           $ct eq "application/vnd.wap.xhtml+xml";
+}
+
+sub content_is_xml {
+    my $ct = shift->content_type;
+    return 1 if $ct eq "text/xml";
+    return 1 if $ct eq "application/xml";
+    return 1 if $ct =~ /\+xml$/;
     return 0;
 }
 
@@ -413,7 +438,9 @@ Returns a copy of this C<HTTP::Headers> object.
 
 =item $h->header( $field )
 
-=item $h->header( $field => $value, ... )
+=item $h->header( $field => $value )
+
+=item $h->header( $f1 => $v1, $f2 => $v2, ... )
 
 Get or set the value of one or more header fields.  The header field
 name ($field) is not case sensitive.  To make the life easier for perl
@@ -449,6 +476,8 @@ Examples:
  $accepts = $header->header('Accept');  # get values as a single string
 
 =item $h->push_header( $field => $value )
+
+=item $h->push_header( $f1 => $v1, $f2 => $v2, ... )
 
 Add a new field value for the specified header field.  Previous values
 for the same field are retained.
@@ -613,6 +642,11 @@ used to set Content-Type.
 
 Returns TRUE if the Content-Type header field indicate that the
 content is XHTML.  This method can't be used to set Content-Type.
+
+=item $h->content_is_xml
+
+Returns TRUE if the Content-Type header field indicate that the
+content is XML.  This method can't be used to set Content-Type.
 
 =item $h->content_encoding
 

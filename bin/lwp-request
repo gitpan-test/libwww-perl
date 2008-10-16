@@ -184,7 +184,7 @@ $progname = $0;
 $progname =~ s,.*[\\/],,;  # use basename only
 $progname =~ s/\.\w*$//;   # strip extension, if any
 
-$VERSION = "5.810";
+$VERSION = "5.818";
 
 
 require LWP;
@@ -224,7 +224,7 @@ use HTTP::Date qw(time2str str2time);
     sub new
     { 
 	my $self = LWP::UserAgent::new(@_);
-	$self->agent("lwp-request/$main::VERSION");
+	$self->agent("lwp-request/$main::VERSION ");
 	$self;
     }
 

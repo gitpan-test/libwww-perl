@@ -152,7 +152,7 @@ my $progname = $0;
 $progname =~ s|.*/||;  # only basename left
 $progname =~ s/\.\w*$//; #strip extension if any
 
-$VERSION = "5.810";
+$VERSION = "5.818";
 
 #$Getopt::Long::debug = 1;
 #$Getopt::Long::ignorecase = 0;
@@ -197,7 +197,7 @@ usage() if @ARGV;
 
 require LWP::UserAgent;
 my $ua = new LWP::UserAgent;
-$ua->agent("$progname/$VERSION " . $ua->agent);
+$ua->agent("$progname/$VERSION ");
 $ua->env_proxy;
 
 unless (defined $PREFIX) {

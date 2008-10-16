@@ -2,7 +2,7 @@ package HTTP::Request;
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = "5.815";
+$VERSION = "5.818";
 
 use strict;
 
@@ -114,6 +114,20 @@ sub as_string
     $req_line .= " $proto" if $proto;
 
     return join($eol, $req_line, $self->SUPER::as_string(@_));
+}
+
+sub dump
+{
+    my $self = shift;
+    my @pre = ($self->method || "-", $self->url || "-");
+    if (my $prot = $self->protocol) {
+	push(@pre, $prot);
+    }
+
+    return $self->SUPER::dump(
+        preheader => join(" ", @pre),
+	@_,
+    );
 }
 
 

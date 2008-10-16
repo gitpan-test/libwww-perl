@@ -3,7 +3,7 @@
 use strict;
 use Test qw(plan ok skip);
 
-plan tests => 110;
+plan tests => 118;
 
 require HTTP::Message;
 use Config qw(%Config);
@@ -26,6 +26,7 @@ $m2 = HTTP::Message->new($m->headers);
 $m2->header(bar => 2);
 ok($m->as_string, "Foo: 1\n\n");
 ok($m2->as_string, "Bar: 2\nFoo: 1\n\n");
+ok($m2->dump, "Bar: 2\nFoo: 1\n\n(no content)\n");
 
 $m2 = HTTP::Message->new($m->headers, "foo");
 ok($m2->as_string, "Foo: 1\n\nfoo\n");
@@ -433,12 +434,49 @@ $m = HTTP::Message->new([
     ],
     "Hello world!"
 );
-$m->encode("gzip");
+$m->encode("deflate");
+$m->dump(prefix => "# ");
+ok($m->dump(prefix => "| "), <<'EOT');
+| Content-Encoding: deflate
+| Content-Type: text/plain
+| 
+| x\x9C\xF3H\xCD\xC9\xC9W(\xCF/\xCAIQ\4\0\35\t\4^
+EOT
 $m->encode("base64", "identity");
 ok($m->as_string, <<'EOT');
-Content-Encoding: gzip, base64, identity
+Content-Encoding: deflate, base64, identity
 Content-Type: text/plain
 
-H4sIAAAAAAAA//NIzcnJVyjPL8pJUQQAlRmFGwwAAAA=
+eJzzSM3JyVcozy/KSVEEAB0JBF4=
 EOT
 ok($m->decoded_content, "Hello world!");
+
+if (eval "require Compress::Bzip2") {
+    $m = HTTP::Message->new([
+	"Content-Type" => "text/plain",
+        ],
+        "Hello world!"
+    );
+    ok($m->encode("x-bzip2"));
+    ok($m->header("Content-Encoding"), "x-bzip2");
+    ok($m->content =~ /\0/);
+    ok($m->decoded_content, "Hello world!");
+    ok($m->decode);
+    ok($m->content, "Hello world!");
+
+    if (0) {
+	# I prepared the following message by using bzip2 command (v1.0.4)
+	# but for some reason it will not pass
+    $m = HTTP::Message->new([
+        "Content-Type" => "text/plain",
+        "Content-Encoding" => "x-bzip2, base64",
+        ],
+	"QlpoOTFBWSZTWcvLx0QAAAHVgAAQYAAAQAYEkIAgADEAMCBoYlnQeSEMvxdyRThQkMvLx0Q=\n"
+    );
+    $m->decode;
+    $m->dump;
+    }
+}
+else {
+    skip("Need Compress::Bzip2", undef) for 1..6;
+}

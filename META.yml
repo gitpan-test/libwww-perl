@@ -1,10 +1,10 @@
 --- #YAML:1.0
 name:                libwww-perl
-version:             5.817
+version:             5.818
 abstract:            ~
 license:             ~
 author:              ~
-generated_by:        ExtUtils::MakeMaker version 6.4401
+generated_by:        ExtUtils::MakeMaker version 6.42_01
 distribution_type:   module
 requires:     
     Compress::Zlib:                1.10

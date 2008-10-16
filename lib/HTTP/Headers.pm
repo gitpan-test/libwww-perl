@@ -4,7 +4,7 @@ use strict;
 use Carp ();
 
 use vars qw($VERSION $TRANSLATE_UNDERSCORE);
-$VERSION = "5.817";
+$VERSION = "5.818";
 
 # The $TRANSLATE_UNDERSCORE variable controls whether '_' can be used
 # as a replacement for '-' in header field names.
@@ -257,12 +257,15 @@ sub as_string
 }
 
 
-sub clone
-{
-    my $self = shift;
-    my $clone = new HTTP::Headers;
-    $self->scan(sub { $clone->push_header(@_);} );
-    $clone;
+if (eval { require Storable; 1 }) {
+    *clone = \&Storable::dclone;
+} else {
+    *clone = sub {
+	my $self = shift;
+	my $clone = new HTTP::Headers;
+	$self->scan(sub { $clone->push_header(@_);} );
+	$clone;
+    };
 }
 
 

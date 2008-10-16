@@ -2,7 +2,7 @@ package HTTP::Message;
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = "5.817";
+$VERSION = "5.818";
 
 require HTTP::Headers;
 require Carp;
@@ -92,7 +92,18 @@ sub clear {
 }
 
 
-sub protocol { shift->_elem('_protocol',  @_); }
+sub protocol {
+    shift->_elem('_protocol',  @_);
+}
+
+sub headers {
+    shift->{'_headers'};
+}
+
+sub headers_as_string {
+    shift->{'_headers'}->as_string(@_);
+}
+
 
 sub content  {
 
@@ -112,6 +123,7 @@ sub content  {
 	Carp::carp("Useless content call in void context") if $^W;
     }
 }
+
 
 sub _set_content {
     my $self = $_[0];
@@ -213,9 +225,14 @@ sub decoded_content
 		}
 		elsif ($ce eq "x-bzip2") {
 		    require Compress::Bzip2;
-		    $content_ref = Compress::Bzip2::decompress($$content_ref);
+		    unless ($content_ref_iscopy) {
+			# memBunzip is documented to destroy its buffer argument
+			my $copy = $$content_ref;
+			$content_ref = \$copy;
+			$content_ref_iscopy++;
+		    }
+		    $content_ref = \Compress::Bzip2::memBunzip($$content_ref);
 		    die "Can't bunzip content" unless defined $$content_ref;
-		    $content_ref_iscopy++;
 		}
 		elsif ($ce eq "deflate") {
 		    require Compress::Zlib;
@@ -359,6 +376,10 @@ sub encode
 	    require Compress::Zlib;
 	    $content = Compress::Zlib::compress($content);
 	}
+	elsif ($encoding eq "x-bzip2") {
+	    require Compress::Bzip2;
+	    $content = Compress::Bzip2::memGzip($content);
+	}
 	elsif ($encoding eq "rot13") {  # for the fun of it
 	    $content =~ tr/A-Za-z/N-ZA-Mn-za-m/;
 	}
@@ -392,8 +413,55 @@ sub as_string
 }
 
 
-sub headers            { shift->{'_headers'};                }
-sub headers_as_string  { shift->{'_headers'}->as_string(@_); }
+sub dump
+{
+    my($self, %opt) = @_;
+    my $content = $self->content;
+    my $chopped = 0;
+    if (!ref($content)) {
+	my $maxlen = $opt{maxlength};
+	$maxlen = 512 unless defined($maxlen);
+	if ($maxlen && length($content) > $maxlen * 1.1 + 3) {
+	    $chopped = length($content) - $maxlen;
+	    $content = substr($content, 0, $maxlen) . "...";
+	}
+
+	$content =~ s/\\/\\\\/g;
+	$content =~ s/\t/\\t/g;
+	$content =~ s/\r/\\r/g;
+
+	# no need for 3 digits in escape for these
+	$content =~ s/([\0-\11\13-\037])(?!\d)/sprintf('\\%o',ord($1))/eg;
+
+	$content =~ s/([\0-\11\13-\037\177-\377])/sprintf('\\x%02X',ord($1))/eg;
+	$content =~ s/([^\12\040-\176])/sprintf('\\x{%X}',ord($1))/eg;
+
+	# remaining whitespace
+	$content =~ s/( +)\n/("\\40" x length($1)) . "\n"/eg;
+	$content =~ s/(\n+)\n/("\\n" x length($1)) . "\n"/eg;
+	$content =~ s/\n\z/\\n/;
+
+	my $no_content = "(no content)";
+	if ($content eq $no_content) {
+	    # escape our $no_content marker
+	    $content =~ s/^(.)/sprintf('\\x%02X',ord($1))/eg;
+	}
+	elsif ($content eq "") {
+	    $content = "(no content)";
+	}
+    }
+
+    my @dump;
+    push(@dump, $opt{preheader}) if $opt{preheader};
+    push(@dump, $self->{_headers}->as_string, $content);
+    push(@dump, "(+ $chopped more bytes not shown)") if $chopped;
+
+    my $dump = join("\n", @dump, "");
+    $dump =~ s/^/$opt{prefix}/gm if $opt{prefix};
+
+    print $dump unless defined wantarray;
+    return $dump;
+}
 
 
 sub parts {
@@ -747,8 +815,8 @@ want to process its content as a string.
 =item $mess->encode( $encoding, ... )
 
 Apply the given encodings to the content of the message.  Returns TRUE
-if successful. Currently supported encodings are "gzip", "deflate" and
-"base64".
+if successful. Currently supported encodings are "gzip", "deflate",
+"x-bzip2" and "base64".
 
 A successful call to this function will set the C<Content-Encoding>
 header.
@@ -831,6 +899,35 @@ The default is "\n".  If no $eol is given then as_string will ensure
 that the returned string is newline terminated (even when the message
 content is not).  No extra newline is appended if an explicit $eol is
 passed.
+
+=item $mess->dump( %opt )
+
+Returns the message formatted as a string.  In void context print the string.
+
+This differs from C<< $mess->as_string >> in that it escapes the bytes
+of the content so that it's safe to print them and it limits how much
+content to print.  The escapes syntax used is the same as for Perl's
+double quoted strings.  If there is no content the string "(no
+content)" is shown in its place.
+
+Options to influence the output can be passed as key/value pairs. The
+following options are recognized:
+
+=over
+
+=item maxlength => $num
+
+How much of the content to show.  The default is 512.  Set this to 0
+for unlimited.
+
+If the content is longer then the string is chopped at the limit and
+the string "...\n(### more bytes not shown)" appended.
+
+=item prefix => $str
+
+A string that will be prefixed to each line of the dump.
+
+=back
 
 =back
 

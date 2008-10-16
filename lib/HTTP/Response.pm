@@ -2,7 +2,7 @@ package HTTP::Response;
 
 require HTTP::Message;
 @ISA = qw(HTTP::Message);
-$VERSION = "5.813";
+$VERSION = "5.818";
 
 use strict;
 use HTTP::Status ();
@@ -180,6 +180,21 @@ sub as_string
     $status_line = "$proto $status_line" if $proto;
 
     return join($eol, $status_line, $self->SUPER::as_string(@_));
+}
+
+
+sub dump
+{
+    my $self = shift;
+
+    my $status_line = $self->status_line;
+    my $proto = $self->protocol;
+    $status_line = "$proto $status_line" if $proto;
+
+    return $self->SUPER::dump(
+	preheader => $status_line,
+        @_,
+    );
 }
 
 

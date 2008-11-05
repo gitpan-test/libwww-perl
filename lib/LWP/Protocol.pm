@@ -2,7 +2,7 @@ package LWP::Protocol;
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.819";
+$VERSION = "5.820";
 
 use strict;
 use Carp ();
@@ -272,6 +272,8 @@ Can be called when the whole response content is available as
 $content.  This will invoke collect() with a collector callback that
 returns a reference to $content the first time and an empty string the
 next.
+
+=back
 
 =head1 SEE ALSO
 

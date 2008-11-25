@@ -430,10 +430,11 @@ else {
 }
 
 $m = HTTP::Message->new([
-    "Content-Type", "text/plain"
+    "Content-Type", "text/plain",
     ],
     "Hello world!"
 );
+$m->content_length(length $m->content);
 $m->encode("deflate");
 $m->dump(prefix => "# ");
 ok($m->dump(prefix => "| "), <<'EOT');
@@ -449,7 +450,11 @@ Content-Type: text/plain
 
 eJzzSM3JyVcozy/KSVEEAB0JBF4=
 EOT
-ok($m->decoded_content, "Hello world!");
+if (eval { require Encode; 1 }) {
+    ok($m->decoded_content, "Hello world!");
+} else {
+    skip('Needs Encode.pm for this test', undef);
+}
 
 if (eval "require Compress::Bzip2") {
     $m = HTTP::Message->new([

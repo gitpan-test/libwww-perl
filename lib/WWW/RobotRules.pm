@@ -1,6 +1,6 @@
 package WWW::RobotRules;
 
-$VERSION = "5.810";
+$VERSION = "5.822";
 sub Version { $VERSION; }
 
 use strict;
@@ -131,13 +131,9 @@ sub is_me {
     #  "User-Agent: ..." line that we were passed:
     
     if(index(lc($me), lc($ua_line)) >= 0) {
-      LWP::Debug::debug("\"$ua_line\" applies to \"$me\"")
-       if defined &LWP::Debug::debug;
       return 1;
     }
     else {
-      LWP::Debug::debug("\"$ua_line\" does not apply to \"$me\"")
-       if defined &LWP::Debug::debug;
       return '';
     }
 }

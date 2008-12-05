@@ -4,7 +4,7 @@ use strict;
 use Carp ();
 
 use vars qw($VERSION $TRANSLATE_UNDERSCORE);
-$VERSION = "5.818";
+$VERSION = "5.822";
 
 # The $TRANSLATE_UNDERSCORE variable controls whether '_' can be used
 # as a replacement for '-' in header field names.
@@ -680,7 +680,7 @@ standard.>
 This header field is used in request messages and contains information
 about the user agent originating the request.  I<E.g.>:
 
-  $h->user_agent('Mozilla/1.2');
+  $h->user_agent('Mozilla/5.0 (compatible; MSIE 7.0; Windows NT 6.0)');
 
 =item $h->server
 

@@ -1,6 +1,6 @@
 package WWW::RobotRules;
 
-$VERSION = "5.822";
+$VERSION = "5.824";
 sub Version { $VERSION; }
 
 use strict;
@@ -105,6 +105,9 @@ sub parse {
 		push(@anon_disallowed, $disallow);
 	    }
 	}
+        elsif (/^\s*Sitemap\s*:/i) {
+             # ignore
+        }
 	else {
 	    warn "RobotRules <$robot_txt_uri>: Unexpected line: $_\n" if $^W;
 	}

@@ -13,7 +13,7 @@ require Exporter;
 require HTTP::Request;
 use Carp();
 
-$VERSION = "5.822";
+$VERSION = "5.824";
 
 my $CRLF = "\015\012";   # "\r\n" is not portable
 
@@ -367,7 +367,7 @@ returned in a separate statement.
 
 =item DELETE $url, Header => Value,...
 
-Like GET() but the method in the request is "DELETE".  This funciton
+Like GET() but the method in the request is "DELETE".  This function
 is not exported by default.
 
 =item POST $url

@@ -5,7 +5,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.823";
+$VERSION = "5.824";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -261,21 +261,12 @@ sub request
     my($self, $request, $arg, $size, $previous) = @_;
 
     my $response = $self->simple_request($request, $arg, $size);
+    $response->previous($previous) if $previous;
 
-    if ($previous) {
-        $response->previous($previous);
-
-	# Check for loop in the redirects, we only count
-	my $count = 0;
-	my $r = $response;
-	while ($r) {
-	    if (++$count > $self->{max_redirect}) {
-		$response->header("Client-Warning" =>
-				  "Redirect loop detected (max_redirect = $self->{max_redirect})");
-		return $response;
-	    }
-	    $r = $r->previous;
-	}
+    if ($response->redirects >= $self->{max_redirect}) {
+        $response->header("Client-Warning" =>
+                          "Redirect loop detected (max_redirect = $self->{max_redirect})");
+        return $response;
     }
 
     if (my $req = $self->run_handlers("response_redirect", $response)) {
@@ -1664,7 +1655,7 @@ specialized user agents based on C<LWP::UserAgent>.
 
 =head1 COPYRIGHT
 
-Copyright 1995-2008 Gisle Aas.
+Copyright 1995-2009 Gisle Aas.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

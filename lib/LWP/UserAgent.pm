@@ -5,7 +5,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.824";
+$VERSION = "5.826";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -37,6 +37,7 @@ sub new
 
     my $agent = delete $cnf{agent};
     my $from  = delete $cnf{from};
+    my $def_headers = delete $cnf{default_headers};
     my $timeout = delete $cnf{timeout};
     $timeout = 3*60 unless defined $timeout;
     my $use_eval = delete $cnf{use_eval};
@@ -78,7 +79,7 @@ sub new
     }
 
     my $self = bless {
-		      def_headers  => undef,
+		      def_headers  => $def_headers,
 		      timeout      => $timeout,
 		      use_eval     => $use_eval,
                       show_progress=> $show_progress,
@@ -157,11 +158,12 @@ sub send_request
                 $@ =~ s/ at .* line \d+.*//s;  # remove file/line number
                 $response =  _new_response($request, &HTTP::Status::RC_NOT_IMPLEMENTED, $@);
                 if ($scheme eq "https") {
-                    $response->message($response->message . " (Crypt::SSLeay not installed)");
+                    $response->message($response->message . " (Crypt::SSLeay or IO::Socket::SSL not installed)");
                     $response->content_type("text/plain");
                     $response->content(<<EOT);
-LWP will support https URLs if the Crypt::SSLeay module is installed.
-More information at <http://www.linpro.no/lwp/libwww-perl/README.SSL>.
+LWP will support https URLs if either Crypt::SSLeay or IO::Socket::SSL
+is installed. More information at
+<http://search.cpan.org/dist/libwww-perl/README.SSL>.
 EOT
                 }
             }
@@ -462,6 +464,8 @@ my @ANI = qw(- \ | /);
 sub progress {
     my($self, $status, $m) = @_;
     return unless $self->{show_progress};
+
+    local($,, $\);
     if ($status eq "begin") {
         print STDERR "** ", $m->method, " ", $m->uri, " ==> ";
         $self->{progress_start} = time;
@@ -923,6 +927,8 @@ sub env_proxy {
 	    $self->no_proxy(split(/\s*,\s*/, $v));
 	}
 	else {
+            # Ignore random _proxy variables, allow only valid schemes
+            next unless $k =~ /^$URI::scheme_re\z/;
 	    $self->proxy($k, $v);
 	}
     }

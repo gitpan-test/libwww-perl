@@ -3,7 +3,7 @@ package LWP::Authen::Ntlm;
 use strict;
 use vars qw/$VERSION/;
 
-$VERSION = '5.822';
+$VERSION = '5.827';
 
 use Authen::NTLM "1.02";
 use MIME::Base64 "2.12";
@@ -13,7 +13,7 @@ sub authenticate {
        $request, $arg, $size) = @_;
 
     my($user, $pass) = $ua->get_basic_credentials($auth_param->{realm},
-                                                  $request->url, $proxy);
+                                                  $request->uri, $proxy);
 
     unless(defined $user and defined $pass) {
 		return $response;

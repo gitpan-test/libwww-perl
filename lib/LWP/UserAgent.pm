@@ -5,7 +5,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.826";
+$VERSION = "5.827";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -203,18 +203,11 @@ sub prepare_request
 {
     my($self, $request) = @_;
     die "Method missing" unless $request->method;
-    my $url = $request->url;
+    my $url = $request->uri;
     die "URL missing" unless $url;
     die "URL must be absolute" unless $url->scheme;
 
     $self->run_handlers("request_preprepare", $request);
-
-    my $max_size = $self->{max_size};
-    if (defined $max_size) {
-	my $last = $max_size - 1;
-	$last = 0 if $last < 0;  # there is no way to actually request no content
-	$request->init_header('Range' => "bytes=0-$last");
-    }
 
     if (my $def_headers = $self->{def_headers}) {
 	for my $h ($def_headers->header_field_names) {
@@ -288,8 +281,8 @@ sub request
 	$referral->remove_header('Host', 'Cookie');
 	
 	if ($referral->header('Referer') &&
-	    $request->url->scheme eq 'https' &&
-	    $referral->url->scheme eq 'http')
+	    $request->uri->scheme eq 'https' &&
+	    $referral->uri->scheme eq 'http')
 	{
 	    # RFC 2616, section 15.1.3.
 	    # https -> http redirect, suppressing Referer
@@ -318,7 +311,7 @@ sub request
 	    $referral_uri = $HTTP::URI_CLASS->new($referral_uri, $base)
 		            ->abs($base);
 	}
-	$referral->url($referral_uri);
+	$referral->uri($referral_uri);
 
 	return $response unless $self->redirect_ok($referral, $response);
 	return $self->request($referral, $arg, $size, $response);
@@ -546,7 +539,7 @@ sub redirect_ok
     return 0 unless grep $_ eq $method,
       @{ $self->requests_redirectable || [] };
     
-    if ($new_request->url->scheme eq 'file') {
+    if ($new_request->uri->scheme eq 'file') {
       $response->header("Client-Warning" =>
 			"Can't redirect to a file:// URL!");
       return 0;
@@ -593,14 +586,20 @@ sub parse_head {
         my $old = $self->set_my_handler("response_header", $flag ? sub {
                my($response, $ua) = @_;
                require HTML::HeadParser;
-               $parser = HTML::HeadParser->new($response->{'_headers'});
+               $parser = HTML::HeadParser->new;
                $parser->xml_mode(1) if $response->content_is_xhtml;
                $parser->utf8_mode(1) if $] >= 5.008 && $HTML::Parser::VERSION >= 3.40;
 
                push(@{$response->{handlers}{response_data}}, {
 		   callback => sub {
 		       return unless $parser;
-		       $parser->parse($_[3]) or undef($parser);
+		       unless ($parser->parse($_[3])) {
+			   my $h = $parser->header;
+			   for my $f ($h->header_field_names) {
+			       $response->init_header($f, [$h->header($f)]);
+			   }
+			   undef($parser);
+		       }
 		   },
 	       });
 
@@ -875,9 +874,9 @@ sub mirror
 sub _need_proxy {
     my($req, $ua) = @_;
     return if exists $req->{proxy};
-    my $proxy = $ua->{proxy}{$req->url->scheme} || return;
+    my $proxy = $ua->{proxy}{$req->uri->scheme} || return;
     if ($ua->{no_proxy}) {
-        if (my $host = eval { $req->url->host }) {
+        if (my $host = eval { $req->uri->host }) {
             for my $domain (@{$ua->{no_proxy}}) {
                 if ($host =~ /\Q$domain\E$/) {
                     return;
@@ -1290,7 +1289,7 @@ proxy URL for a single access scheme.
 Do not proxy requests to the given domains.  Calling no_proxy without
 any domains clears the list of domains. Eg:
 
- $ua->no_proxy('localhost', 'no', ...);
+ $ua->no_proxy('localhost', 'example.com');
 
 =item $ua->env_proxy
 
@@ -1299,7 +1298,7 @@ specify proxies like this (sh-syntax):
 
   gopher_proxy=http://proxy.my.place/
   wais_proxy=http://proxy.my.place/
-  no_proxy="localhost,my.domain"
+  no_proxy="localhost,example.com"
   export gopher_proxy wais_proxy no_proxy
 
 csh or tcsh users should use the C<setenv> command to define these
@@ -1452,6 +1451,15 @@ arguments can be given to initialize the headers of the request. These
 are given as separate name/value pairs.  The return value is a
 response object.  See L<HTTP::Response> for a description of the
 interface it provides.
+
+There will still be a response object returned when LWP can't connect to the
+server specified in the URL or when other failures in protocol handlers occur.
+These internal responses use the standard HTTP status codes, so the responses
+can't be differentiated by testing the response status code alone.  Error
+responses that LWP generates internally will have the "Client-Warning" header
+set to the value "Internal response".  If you need to differentiate these
+internal responses from responses that a remote server actually generates, you
+need to test this header value.
 
 Fields names that start with ":" are special.  These will not
 initialize headers of the request but will determine how the response

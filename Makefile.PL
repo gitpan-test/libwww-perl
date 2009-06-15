@@ -14,7 +14,7 @@ GetOptions(\my %opt,
 };
 
 my @prog;
-push(@prog, qw(lwp-request lwp-mirror lwp-rget lwp-download))
+push(@prog, qw(lwp-request lwp-mirror lwp-rget lwp-download lwp-dump))
     unless $opt{'no-programs'} || grep /^LIB=/, @ARGV;
 
 if ($opt{'aliases'} && grep(/lwp-request/, @prog)) {
@@ -67,7 +67,6 @@ if($] >= 5.008 && !(eval { require Encode; defined(Encode::decode("UTF-8", "\xff
            "install the latest Encode from CPAN.\n\n";
 }
 
-exit;
 
 
 sub MY::test

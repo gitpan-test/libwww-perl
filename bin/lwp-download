@@ -73,7 +73,7 @@ unless (getopts('a', \%opt)) {
 my $url = URI->new(shift || usage());
 my $argfile = shift;
 usage() if defined($argfile) && !length($argfile);
-my $VERSION = "5.813";
+my $VERSION = "5.827";
 
 my $ua = LWP::UserAgent->new(
    agent => "lwp-download/$VERSION ",
@@ -111,7 +111,7 @@ my $res = $ua->request(HTTP::Request->new(GET => $url),
 	      # if this fails we try to make something from the URL
 	      unless ($file) {
 		  my $req = $res->request;  # not always there
-		  my $rurl = $req ? $req->url : $url;
+		  my $rurl = $req ? $req->uri : $url;
 
 		  $file = ($rurl->path_segments)[-1];
 		  if (!defined($file) || !length($file)) {

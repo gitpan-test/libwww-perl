@@ -5,7 +5,7 @@ use HTTP::Date qw(str2time time2str);
 use HTTP::Headers::Util qw(_split_header_words join_header_words);
 
 use vars qw($VERSION $EPOCH_OFFSET);
-$VERSION = "5.824";
+$VERSION = "5.827";
 
 # Legacy: because "use "HTTP::Cookies" used be the ONLY way
 #  to load the class HTTP::Cookies::Netscape.
@@ -39,7 +39,7 @@ sub add_cookie_header
 {
     my $self = shift;
     my $request = shift || return;
-    my $url = $request->url;
+    my $url = $request->uri;
     my $scheme = $url->scheme;
     unless ($scheme =~ /^https?\z/) {
 	return;
@@ -177,7 +177,7 @@ sub extract_cookies
     return $response unless @set || @ns_set;  # quick exit
 
     my $request = $response->request;
-    my $url = $request->url;
+    my $url = $request->uri;
     my $req_host = _host($request, $url);
     $req_host = "$req_host.local" unless $req_host =~ /\./;
     my $req_port = $url->port;

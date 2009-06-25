@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               libwww-perl
-version:            5.827
+version:            5.828
 abstract:           The World-Wide Web library for Perl
 author:
     - Gisle Aas <gisle@activestate.com>

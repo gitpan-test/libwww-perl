@@ -1,6 +1,6 @@
 package LWP;
 
-$VERSION = "5.828";
+$VERSION = "5.829";
 sub Version { $VERSION; }
 
 require 5.005;
@@ -295,7 +295,7 @@ represented in actual perl code:
 
   # Create a user agent object
   use LWP::UserAgent;
-  $ua = LWP::UserAgent->new;
+  my $ua = LWP::UserAgent->new;
   $ua->agent("MyApp/0.1 ");
 
   # Create a request

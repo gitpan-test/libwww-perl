@@ -1,14 +1,12 @@
 --- #YAML:1.0
 name:               libwww-perl
-version:            5.830
+version:            5.831
 abstract:           The World-Wide Web library for Perl
 author:
     - Gisle Aas <gisle@activestate.com>
 license:            perl
 distribution_type:  module
 configure_requires:
-    ExtUtils::MakeMaker:  0
-build_requires:
     ExtUtils::MakeMaker:  0
 requires:
     Compress::Zlib:  1.10
@@ -26,7 +24,7 @@ no_index:
     directory:
         - t
         - inc
-generated_by:       ExtUtils::MakeMaker version 6.55_02
+generated_by:       ExtUtils::MakeMaker version 6.4801
 meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html
     version:  1.4

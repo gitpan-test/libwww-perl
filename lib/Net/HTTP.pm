@@ -3,7 +3,7 @@ package Net::HTTP;
 use strict;
 use vars qw($VERSION @ISA $SOCKET_CLASS);
 
-$VERSION = "5.819";
+$VERSION = "5.831";
 unless ($SOCKET_CLASS) {
     eval { require IO::Socket::INET } || require IO::Socket;
     $SOCKET_CLASS = "IO::Socket::INET";
@@ -111,7 +111,7 @@ and C<peer_http_version> attributes.
 Get/set the a value indicating if the request will be sent with a "TE"
 header to indicate the transfer encodings that the server can choose to
 use.  If the C<Compress::Zlib> module is installed then this will
-announce that this client accept both the I<deflate> and I<gzip>
+announce that this client accepts both the I<deflate> and I<gzip>
 encodings.
 
 =item $s->http_version

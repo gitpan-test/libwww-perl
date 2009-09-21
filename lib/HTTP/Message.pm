@@ -2,7 +2,7 @@ package HTTP::Message;
 
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = "5.831";
+$VERSION = "5.832";
 
 require HTTP::Headers;
 require Carp;
@@ -248,6 +248,7 @@ sub content_charset
 		    if (my $c = $attr->{content}) {
 			require HTTP::Headers::Util;
 			my @v = HTTP::Headers::Util::split_header_words($c);
+			return unless @v;
 			my($ct, undef, %ct_param) = @{$v[0]};
 			$charset = $ct_param{charset};
 		    }

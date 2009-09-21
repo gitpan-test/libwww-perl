@@ -5,7 +5,7 @@ use HTTP::Date qw(str2time time2str);
 use HTTP::Headers::Util qw(_split_header_words join_header_words);
 
 use vars qw($VERSION $EPOCH_OFFSET);
-$VERSION = "5.827";
+$VERSION = "5.832";
 
 # Legacy: because "use "HTTP::Cookies" used be the ONLY way
 #  to load the class HTTP::Cookies::Netscape.
@@ -89,7 +89,7 @@ sub add_cookie_header
 		if ($port) {
 		    my $found;
 		    if ($port =~ s/^_//) {
-			# The correponding Set-Cookie attribute was empty
+			# The corresponding Set-Cookie attribute was empty
 			$found++ if $port eq $req_port;
 			$port = "";
 		    }
@@ -186,7 +186,7 @@ sub extract_cookies
 
     if (@ns_set) {
 	# The old Netscape cookie format for Set-Cookie
-	# http://wp.netscape.com/newsref/std/cookie_spec.html
+	# http://curl.haxx.se/rfc/cookie_spec.html
 	# can for instance contain an unquoted "," in the expires
 	# field, so we have to use this ad-hoc parser.
 	my $now = time();
@@ -261,7 +261,7 @@ sub extract_cookies
 	    if ($k eq "discard" || $k eq "secure") {
 		$v = 1 unless defined $v;
 	    }
-	    next if exists $hash{$k};  # only first value is signigicant
+	    next if exists $hash{$k};  # only first value is significant
 	    $hash{$k} = $v;
 	};
 
@@ -611,7 +611,7 @@ knows about.
 Cookies are a general mechanism which server side connections can use
 to both store and retrieve information on the client side of the
 connection.  For more information about cookies refer to
-<URL:http://wp.netscape.com/newsref/std/cookie_spec.html> and
+<URL:http://curl.haxx.se/rfc/cookie_spec.html> and
 <URL:http://www.cookiecentral.com/>.  This module also implements the
 new style cookies described in I<RFC 2965>.
 The two variants of cookies are supposed to be able to coexist happily.

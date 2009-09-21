@@ -5,7 +5,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.829";
+$VERSION = "5.832";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -932,6 +932,8 @@ sub env_proxy {
 	else {
             # Ignore random _proxy variables, allow only valid schemes
             next unless $k =~ /^$URI::scheme_re\z/;
+            # Ignore xxx_proxy variables if xxx isn't a supported protocol
+            next unless LWP::Protocol::implementor($k);
 	    $self->proxy($k, $v);
 	}
     }
@@ -1055,7 +1057,7 @@ The settings of the configuration attributes modify the behaviour of the
 C<LWP::UserAgent> when it dispatches requests.  Most of these can also
 be initialized by options passed to the constructor method.
 
-The following attributes methods are provided.  The attribute value is
+The following attribute methods are provided.  The attribute value is
 left unchanged if no argument is given.  The return value from each
 method is the old attribute value.
 

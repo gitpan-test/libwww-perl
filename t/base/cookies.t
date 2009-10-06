@@ -1,7 +1,7 @@
 #!perl -w
 
 use Test;
-plan tests => 62;
+plan tests => 66;
 
 use HTTP::Cookies;
 use HTTP::Request;
@@ -643,6 +643,43 @@ $req = HTTP::Request->new(GET => "http://www.example.com/foo");
 $c->add_cookie_header($req);
 #print $req->as_string;
 ok($req->header("Cookie"), "foo=\"bar\"");
+
+# Test cookies that expire far into the future [RT#50147]
+$c = HTTP::Cookies->new;
+$res->header("Set-Cookie", "PREF=ID=cee18f7c4e977184:TM=1254583090:LM=1254583090:S=Pdb0-hy9PxrNj4LL; expires=Mon, 03-Oct-2211 15:18:10 GMT; path=/; domain=.example.com");
+$res->push_header("Set-Cookie", "expired1=1; expires=Mon, 03-Oct-2001 15:18:10 GMT; path=/; domain=.example.com");
+$res->push_header("Set-Cookie", "expired2=1; expires=Fri Jan  1 00:00:00 GMT 1970; path=/; domain=.example.com");
+$res->push_header("Set-Cookie", "expired3=1; expires=Fri Jan  1 00:00:01 GMT 1970; path=/; domain=.example.com");
+$res->push_header("Set-Cookie", "expired4=1; expires=Thu Dec 31 23:59:59 GMT 1969; path=/; domain=.example.com");
+$res->push_header("Set-Cookie", "expired5=1; expires=Fri Feb  2 00:00:00 GMT 1950; path=/; domain=.example.com");
+$c->extract_cookies($res);
+#print $res->as_string;
+#print "---\n";
+#print $c->as_string;
+$req = HTTP::Request->new(GET => "http://www.example.com/foo");
+$c->add_cookie_header($req);
+#print $req->as_string;
+ok($req->header("Cookie"), "PREF=ID=cee18f7c4e977184:TM=1254583090:LM=1254583090:S=Pdb0-hy9PxrNj4LL");
+
+$c->clear_temporary_cookies;
+$req = HTTP::Request->new(GET => "http://www.example.com/foo");
+$c->add_cookie_header($req);
+#print $req->as_string;
+ok($req->header("Cookie"), "PREF=ID=cee18f7c4e977184:TM=1254583090:LM=1254583090:S=Pdb0-hy9PxrNj4LL");
+
+# Test merging of cookies
+$c = HTTP::Cookies->new;
+$res->header("Set-Cookie", "foo=1; path=/");
+$c->extract_cookies($res);
+
+$req = HTTP::Request->new(GET => "http://www.example.com/foo");
+$req->header("Cookie", "x=bcd");
+$c->add_cookie_header($req);
+ok($req->header("Cookie"), "x=bcd; foo=1");
+$c->add_cookie_header($req);
+ok($req->header("Cookie"), "x=bcd; foo=1; foo=1");
+#print $req->as_string;
+
 
 #-------------------------------------------------------------------
 

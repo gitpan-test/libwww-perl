@@ -5,7 +5,7 @@ use vars qw(@ISA $VERSION);
 
 require LWP::MemberMixin;
 @ISA = qw(LWP::MemberMixin);
-$VERSION = "5.832";
+$VERSION = "5.833";
 
 use HTTP::Request ();
 use HTTP::Response ();
@@ -92,7 +92,8 @@ sub new
                       requests_redirectable => $requests_redirectable,
 		     }, $class;
 
-    $self->agent($agent || $class->_agent);
+    $self->agent(defined($agent) ? $agent : $class->_agent)
+	if defined($agent) || !$def_headers || !$def_headers->header("User-Agent");
     $self->from($from) if $from;
     $self->cookie_jar($cookie_jar) if $cookie_jar;
     $self->parse_head($parse_head);
@@ -834,12 +835,16 @@ sub mirror
     my $tmpfile = "$file-$$";
 
     my $response = $self->request($request, $tmpfile);
+    if ( $response->header('X-Died') ) {
+	die $response->header('X-Died');
+    }
 
     # Only fetching a fresh copy of the would be considered success.
     # If the file was not modified, "304" would returned, which 
     # is considered by HTTP::Status to be a "redirect", /not/ "success"
     if ( $response->is_success ) {
-        my $file_length = ( stat($tmpfile) )[7];
+        my @stat        = stat($tmpfile) or die "Could not stat tmpfile '$tmpfile': $!";
+        my $file_length = $stat[7];
         my ($content_length) = $response->header('Content-length');
 
         if ( defined $content_length and $file_length < $content_length ) {

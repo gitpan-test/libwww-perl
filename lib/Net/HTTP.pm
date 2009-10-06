@@ -3,7 +3,7 @@ package Net::HTTP;
 use strict;
 use vars qw($VERSION @ISA $SOCKET_CLASS);
 
-$VERSION = "5.832";
+$VERSION = "5.833";
 unless ($SOCKET_CLASS) {
     eval { require IO::Socket::INET } || require IO::Socket;
     $SOCKET_CLASS = "IO::Socket::INET";
@@ -128,7 +128,7 @@ read_response_headers() method call.
 =item $s->max_line_length
 
 Get/set a limit on the length of response line and response header
-lines.  The default is 4096.  A value of 0 means no limit.
+lines.  The default is 8192.  A value of 0 means no limit.
 
 =item $s->max_header_length
 

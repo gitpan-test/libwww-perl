@@ -1,6 +1,6 @@
 #!perl -w
 
-require 5.006;
+require 5.008008;
 use strict;
 use ExtUtils::MakeMaker;
 use Getopt::Long qw(GetOptions);
@@ -14,7 +14,7 @@ GetOptions(\my %opt,
 };
 
 my @prog;
-push(@prog, qw(lwp-request lwp-mirror lwp-rget lwp-download lwp-dump))
+push(@prog, qw(lwp-request lwp-mirror lwp-download lwp-dump))
     unless $opt{'no-programs'} || grep /^LIB=/, @ARGV;
 
 if ($opt{'aliases'} && grep(/lwp-request/, @prog)) {
@@ -38,24 +38,38 @@ WriteMakefile(
     AUTHOR => 'Gisle Aas <gisle@activestate.com>',
     EXE_FILES => [ map "bin/$_", @prog ],
     LICENSE => "perl",
-    MIN_PERL_VERSION => 5.006,
+    MIN_PERL_VERSION => 5.008008,
     PREREQ_PM => {
-        'URI'            => "1.10",
-        'MIME::Base64'   => "2.1",
-        'Net::FTP'       => "2.58",
-        'HTML::Tagset'   => 0,
-        'HTML::Parser'   => "3.33",
-        'Digest::MD5'    => 0,
-        'Compress::Raw::Zlib'        => 0,
-        'IO::Compress::Gzip'         => 0,
-        'IO::Compress::Deflate'      => 0,
-        'IO::Uncompress::Gunzip'     => 0,
-        'IO::Uncompress::Inflate'    => 0,
-        'IO::Uncompress::RawInflate' => 0,
+        'Digest::MD5' => 0,
+        'Encode' => "2.12",
+        'Encode::Locale' => 0,
+        'File::Listing' => 6,
+        'HTML::Entities' => 0,
+        'HTML::HeadParser' => 0,
+        'HTTP::Cookies' => 6,
+        'HTTP::Date' => 6,
+        'HTTP::Negotiate' => 6,
+        'HTTP::Request' => 6,
+        'HTTP::Request::Common' => 6,
+        'HTTP::Response' => 6,
+        'HTTP::Status' => 6,
+        'IO::Select' => 0,
+        'IO::Socket' => 0,
+        'LWP::MediaTypes' => 6,
+        'MIME::Base64' => "2.1",
+        'Net::FTP' => "2.58",
+        'Net::HTTP' => 6,
+        'URI' => "1.10",
+        'URI::Escape' => 0,
+        'WWW::RobotRules' => 6,
     },
     META_MERGE => {
         recommends => {
-            'Crypt::SSLeay' => 0,
+	    'Net::HTTPS' => 6,
+            'IO::Socket::SSL' => "1.38",
+            'Mozilla::CA' => "20110101",
+            'Authen::NTML' => "2.12",
+            'Data::Dump' => 0,
         },
 	resources => {
             repository => 'http://github.com/gisle/libwww-perl',
@@ -64,13 +78,6 @@ WriteMakefile(
     },
     clean => { FILES => join(" ", map "bin/$_", grep /^[A-Z]+$/, @prog) },
 );
-
-if($] >= 5.008 && !(eval { require Encode; defined(Encode::decode("UTF-8", "\xff")) })) {
-    warn "\nYou lack a working Encode module, and so you will miss out on\n".
-           "lots of character set goodness from LWP.  However, your perl is\n".
-           "sufficiently recent to support it.  It is recommended that you\n".
-           "install the latest Encode from CPAN.\n\n";
-}
 
 
 
@@ -101,7 +108,7 @@ sub flag_file {
 
 BEGIN {
     # compatibility with older versions of MakeMaker
-    my $developer = -f "NOTES.txt";
+    my $developer = -f ".gitignore";
     my %mm_req = (
         LICENCE => 6.31,
         META_MERGE => 6.45,

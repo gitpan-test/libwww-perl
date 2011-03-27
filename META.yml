@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               libwww-perl
-version:            6.01
+version:            6.02
 abstract:           The World-Wide Web library for Perl
 author:
     - Gisle Aas <gisle@activestate.com>
@@ -42,13 +42,11 @@ no_index:
     directory:
         - t
         - inc
-generated_by:       ExtUtils::MakeMaker version 6.56
+generated_by:       ExtUtils::MakeMaker version 6.57_05
 meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html
     version:  1.4
 recommends:
-    Authen::NTML:     2.12
-    Data::Dump:       0
-    IO::Socket::SSL:  1.38
-    Mozilla::CA:      20110101
-    Net::HTTPS:       6
+    Authen::NTLM:         1.02
+    Data::Dump:           0
+    LWP::Protocol::https:  6.02

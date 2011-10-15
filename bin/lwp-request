@@ -184,7 +184,7 @@ $progname = $0;
 $progname =~ s,.*[\\/],,;  # use basename only
 $progname =~ s/\.\w*$//;   # strip extension, if any
 
-$VERSION = "6.00";
+$VERSION = "6.03";
 
 
 require LWP;
@@ -368,6 +368,7 @@ if (defined $options{'i'}) {
 }
 
 $content = undef;
+$user_ct = undef;
 if ($allowed_methods{$method} eq "C") {
     # This request needs some content
     unless (defined $options{'c'}) {
@@ -378,7 +379,8 @@ if ($allowed_methods{$method} eq "C") {
     }
     else {
         die "$progname: Illegal Content-type format\n"
-            unless $options{'c'} =~ m,^[\w\-]+/[\w\-.+]+(?:\s*;.*)?$,
+            unless $options{'c'} =~ m,^[\w\-]+/[\w\-.+]+(?:\s*;.*)?$,;
+	$user_ct++;
     }
     print STDERR "Please enter content ($options{'c'}) to be ${method}ed:\n"
         if -t;
@@ -394,13 +396,20 @@ else {
 $request = HTTP::Request->new($method);
 $request->header('If-Modified-Since', $options{'i'}) if defined $options{'i'};
 for my $user_header (@{ $options{'H'} || [] }) {
-    my ($header_name, $header_value) = split /:\s*/, $user_header, 2;
-    $request->header($header_name, $header_value);
-    $ua->agent($header_value) if lc($header_name) eq "user-agent"; # Ugh!
+    my ($header_name, $header_value) = split /\s*:\s*/, $user_header, 2;
+    $header_name =~ s/^\s+//;
+    if (lc($header_name) eq "user-agent") {
+	$header_value .= $ua->agent if $header_value =~ /\s\z/;
+	$ua->agent($header_value);
+    }
+    else {
+	$request->push_header($header_name, $header_value);
+    }
 }
 #$request->header('Accept', '*/*');
 if ($options{'c'}) { # will always be set for request that wants content
-    $request->header('Content-Type', $options{'c'});
+    my $header = ($user_ct ? 'header' : 'init_header');
+    $request->$header('Content-Type', $options{'c'});
     $request->header('Content-Length', length $content);  # Not really needed
     $request->content($content);
 }

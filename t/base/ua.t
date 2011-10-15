@@ -3,9 +3,17 @@
 use strict;
 use Test;
 
-plan tests => 21;
+plan tests => 35;
 
 use LWP::UserAgent;
+
+# Prevent environment from interfering with test:
+delete $ENV{PERL_LWP_SSL_VERIFY_HOSTNAME};
+delete $ENV{HTTPS_CA_FILE};
+delete $ENV{HTTPS_CA_DIR};
+delete $ENV{PERL_LWP_SSL_CA_FILE};
+delete $ENV{PERL_LWP_SSL_CA_PATH};
+delete $ENV{PERL_LWP_ENV_PROXY};
 
 my $ua = LWP::UserAgent->new;
 my $clone = $ua->clone;
@@ -55,3 +63,45 @@ ok($ua->ssl_opts("verify_hostname"), 0);
 ok($ua->ssl_opts(verify_hostname => undef), 0);
 ok($ua->ssl_opts("verify_hostname"), undef);
 ok(join(":", $ua->ssl_opts), "");
+
+$ua = LWP::UserAgent->new(ssl_opts => {});
+ok($ua->ssl_opts("verify_hostname"), 1);
+
+$ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 0 });
+ok($ua->ssl_opts("verify_hostname"), 0);
+
+$ua = LWP::UserAgent->new(ssl_opts => { SSL_ca_file => 'cert.dat'});
+ok($ua->ssl_opts("verify_hostname"), 1);
+ok($ua->ssl_opts("SSL_ca_file"), 'cert.dat');
+
+$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 1;
+$ua = LWP::UserAgent->new();
+ok($ua->ssl_opts("verify_hostname"), 1);
+
+$ua = LWP::UserAgent->new(ssl_opts => {});
+ok($ua->ssl_opts("verify_hostname"), 1);
+
+$ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 0 });
+ok($ua->ssl_opts("verify_hostname"), 0);
+
+$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 0;
+$ua = LWP::UserAgent->new();
+ok($ua->ssl_opts("verify_hostname"), 0);
+
+$ua = LWP::UserAgent->new(ssl_opts => {});
+ok($ua->ssl_opts("verify_hostname"), 0);
+
+$ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 1 });
+ok($ua->ssl_opts("verify_hostname"), 1);
+
+$ENV{http_proxy} = "http://example.com";
+$ua = LWP::UserAgent->new;
+ok($ua->proxy('http'), undef);
+$ua = LWP::UserAgent->new(env_proxy => 1);;
+ok($ua->proxy('http'), "http://example.com");
+
+$ENV{PERL_LWP_ENV_PROXY} = 1;
+$ua = LWP::UserAgent->new();
+ok($ua->proxy('http'), "http://example.com");
+$ua = LWP::UserAgent->new(env_proxy => 0);
+ok($ua->proxy('http'), undef);

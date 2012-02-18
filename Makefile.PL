@@ -1,6 +1,6 @@
 #!perl -w
 
-require 5.008008;
+require 5.008001;
 use strict;
 use ExtUtils::MakeMaker;
 use Getopt::Long qw(GetOptions);
@@ -9,8 +9,9 @@ GetOptions(\my %opt,
    'aliases',
    'no-programs|n',
    'live-tests',
+   'jigsaw-tests',
 ) or do {
-    die "Usage: $0 [--aliases] [--no-programs] [--live-tests]\n";
+    die "Usage: $0 [--aliases] [--no-programs] [--live-tests] [--jigsaw-tests]\n";
 };
 
 my @prog;
@@ -29,6 +30,7 @@ if ($opt{'aliases'} && grep(/lwp-request/, @prog)) {
 system($^X, "talk-to-ourself");
 flag_file("t/CAN_TALK_TO_OURSELF", $? == 0);
 flag_file("t/live/ENABLED", $opt{'live-tests'});
+flag_file("t/live/jigsaw/ENABLED", $opt{'jigsaw-tests'});
 
 WriteMakefile(
     NAME => 'LWP',
@@ -38,7 +40,7 @@ WriteMakefile(
     AUTHOR => 'Gisle Aas <gisle@activestate.com>',
     EXE_FILES => [ map "bin/$_", @prog ],
     LICENSE => "perl",
-    MIN_PERL_VERSION => 5.008008,
+    MIN_PERL_VERSION => 5.008001,
     PREREQ_PM => {
         'Digest::MD5' => 0,
         'Encode' => "2.12",

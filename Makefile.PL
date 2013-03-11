@@ -61,7 +61,7 @@ WriteMakefile(
         'LWP::MediaTypes' => 6,
         'MIME::Base64' => "2.1",
         'Net::FTP' => "2.58",
-        'Net::HTTP' => 6,
+        'Net::HTTP' => "6.04",
         'URI' => "1.10",
         'URI::Escape' => 0,
         'WWW::RobotRules' => 6,
@@ -73,7 +73,7 @@ WriteMakefile(
             'Data::Dump' => 0,
         },
 	resources => {
-            repository => 'http://github.com/gisle/libwww-perl',
+            repository => 'https://github.com/libwww-perl/libwww-perl',
 	    MailingList => 'mailto:libwww@perl.org',
         }
     },

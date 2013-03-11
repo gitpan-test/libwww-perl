@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               libwww-perl
-version:            6.04
+version:            6.05
 abstract:           The World-Wide Web library for Perl
 author:
     - Gisle Aas <gisle@activestate.com>
@@ -30,14 +30,14 @@ requires:
     LWP::MediaTypes:      6
     MIME::Base64:         2.1
     Net::FTP:             2.58
-    Net::HTTP:            6
+    Net::HTTP:            6.04
     perl:                 5.008001
     URI:                  1.10
     URI::Escape:          0
     WWW::RobotRules:      6
 resources:
     MailingList:  mailto:libwww@perl.org
-    repository:   http://github.com/gisle/libwww-perl
+    repository:   https://github.com/libwww-perl/libwww-perl
 no_index:
     directory:
         - t

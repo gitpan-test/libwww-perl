@@ -1,4 +1,37 @@
 _______________________________________________________________________________
+2013-03-11  Release 6.05
+
+Karen Etheridge (3):
+      Derive message from status code if it was not provided
+      Merge pull request #33 from tomhukins/fix-readme
+      fix typo in comment
+
+Ville Skyttä (3):
+      Spelling fixes.
+      Spelling fix.
+      Merge pull request #34 from berekuk/fix-github-path
+
+Gisle Aas (3):
+      Update repo URL
+      With Net::HTTP 6.04 we don't need our own can_read() and sysread override
+      $ENV{HTTP_PROXY} might override our test setup [RT#81381]
+
+Vyacheslav Matyukhin (1):
+      fix github url in perldoc
+
+Slaven Rezic (1):
+      * Pod is utf-8
+
+Peter Rabbitson (1):
+      Match required perl in Makefile.PL
+
+Tom Hukins (1):
+      Fix Github URLs
+
+
+
+
+_______________________________________________________________________________
 2012-02-18  Release 6.04
 
 Gisle Aas (4):
@@ -298,12 +331,12 @@ phrstbrn (1):
 _______________________________________________________________________________
 2009-06-25  Release 5.828
 
-A quick new release to restore compatiblity with perl-5.6.
+A quick new release to restore compatibility with perl-5.6.
 
 
 Gisle Aas (4):
       Less noisy behaviour when we can't download the documents
-      Restore perl-5.6 compatiblity [RT#47054]
+      Restore perl-5.6 compatibility [RT#47054]
       Don't decode US-ASCII and ISO-8859-1 content
       Some versions of Encode don't support UTF-16-BE [RT#47152]
 

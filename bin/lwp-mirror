@@ -13,7 +13,7 @@ lwp-mirror - Simple mirror utility
 =head1 DESCRIPTION
 
 This program can be used to mirror a document from a WWW server.  The
-document is only transfered if the remote copy is newer than the local
+document is only transferred if the remote copy is newer than the local
 copy.  If the local copy is newer nothing happens.
 
 Use the C<-v> option to print the version number of this program.
@@ -47,7 +47,7 @@ $progname = $0;
 $progname =~ s,.*/,,;  # use basename only
 $progname =~ s/\.\w*$//; #strip extension if any
 
-$VERSION = "6.00";
+$VERSION = "6.05";
 
 $opt_h = undef;  # print usage
 $opt_v = undef;  # print version

@@ -67,4 +67,5 @@ t/net/moved.t
 t/net/proxy.t
 t/robot/ua-get.t
 t/robot/ua.t			Test LWP::RobotUA
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)

@@ -4,7 +4,7 @@
       "Gisle Aas <gisle@activestate.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.6302, CPAN::Meta::Converter version 2.130880",
+   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.141170",
    "license" : [
       "perl_5"
    ],
@@ -36,7 +36,6 @@
             "LWP::Protocol::https" : "6.02"
          },
          "requires" : {
-            "Data::Dump" : "0",
             "Digest::MD5" : "0",
             "Encode" : "2.12",
             "Encode::Locale" : "0",
@@ -71,5 +70,5 @@
       },
       "x_MailingList" : "mailto:libwww@perl.org"
    },
-   "version" : "6.06"
+   "version" : "6.07"
 }
